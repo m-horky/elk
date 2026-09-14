@@ -90,6 +90,9 @@ linters:
       - path: cmd/test-elk-config
         linters:
           - depguard
+          - err113
+          - exhaustruct_v5
+          - ireturn
           - nlreturn
           - wsl_v5
       # This package is a Linux syscall-backed adapter. Its unsafe conversions,
