@@ -1,0 +1,32 @@
+[compatibility]
+interpret-legacy-configurations = true
+
+[http.timeout]
+connect = 30
+idle = 120
+
+[http.proxy]
+uri = ""
+user = ""
+password = ""
+no-proxy = ""
+
+[api.subscriptions]
+uri = "https://subscription.rhsm.redhat.com/subscription"
+tls-verify = true
+ca-path = "/etc/rhsm/ca/redhat-uep.pem"
+
+[api.content.rpm]
+uri = "https://cdn.redhat.com"
+tls-verify = true
+ca-path = "/etc/rhsm/ca/redhat-uep.pem"
+
+[api.insights.ingress]
+uri = "https://cert.console.redhat.com/api/ingress/v1"
+tls-verify = true
+ca-path = "system"
+
+[api.insights.inventory]
+uri = "https://cert.console.redhat.com/api/inventory/v1"
+tls-verify = true
+ca-path = "system"

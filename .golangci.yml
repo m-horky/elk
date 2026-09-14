@@ -1,0 +1,93 @@
+version: "2"
+linters:
+  default: none
+  enable:
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - containedctx
+    - contextcheck
+    - copyloopvar
+    - depguard
+    - durationcheck
+    - dupword
+    - embeddedstructfieldcheck
+    - err113
+    - errcheck
+    - errchkjson
+    - errname
+    - errorlint
+    - exhaustive
+    - exhaustruct_v5
+    - exptostd
+    - fatcontext
+    - funcorder
+    - funlen
+    - gocheckcompilerdirectives
+    - gochecknoinits
+    - gochecknoglobals
+    - gochecksumtype
+    - gocritic
+    - godoclint
+    - gosmopolitan
+    - gosec
+    - godot
+    - govet
+    - ireturn
+    - importas
+    - inamedparam
+    - ineffassign
+    - iface
+    - lll
+    - loggercheck
+    - maintidx
+    - makezero
+    - mirror
+    - misspell
+    - modernize
+    - nestif
+    - nilerr
+    - nilnil
+    - nilnesserr
+    - nosprintfhostport
+    - nonamedreturns
+    - predeclared
+    - sloglint
+    - staticcheck
+    - thelper
+    - unconvert
+    - unused
+    - whitespace
+    - wsl_v5
+    - nlreturn
+    - wrapcheck
+  exclusions:
+    rules:
+      # These checks are intentionally relaxed for the loader's compatibility
+      # and adapter code: dynamic paths, sentinel construction, and partial
+      # structs are inherent to this implementation.
+      - path: internal/conf
+        linters:
+          - depguard
+          - err113
+          - exhaustruct_v5
+          - funcorder
+          - funlen
+          - gochecknoglobals
+          - gosec
+          - lll
+          - nestif
+          - staticcheck
+          - wsl_v5
+          - nlreturn
+      - path: internal/conf/config_test.go
+        linters:
+          - lll
+          - exhaustruct_v5
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+formatters:
+  enable:
+    - gci
+    - gofumpt
