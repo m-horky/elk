@@ -84,6 +84,25 @@ linters:
         linters:
           - lll
           - exhaustruct_v5
+      # This command is an integration harness whose dependencies are its
+      # purpose; the whitespace rules are not useful for its linear startup
+      # and discovery flow.
+      - path: cmd/test-elk-config
+        linters:
+          - depguard
+          - nlreturn
+          - wsl_v5
+      # This package is a Linux syscall-backed adapter. Its unsafe conversions,
+      # interface returns, and metadata struct are deliberate implementation
+      # details of the filesystem contract.
+      - path: internal/fs
+        linters:
+          - exhaustruct_v5
+          - gosec
+          - ireturn
+          - nlreturn
+          - unconvert
+          - wsl_v5
 issues:
   max-issues-per-linter: 0
   max-same-issues: 0

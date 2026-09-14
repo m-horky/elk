@@ -3,13 +3,14 @@ package main
 import (
 	"errors"
 	"fmt"
-	"io/fs"
+	iofs "io/fs"
 	"os"
 	"path/filepath"
 	"sort"
 
 	"github.com/BurntSushi/toml"
 	"github.com/m-horky/elk/internal/config"
+	elkfs "github.com/m-horky/elk/internal/fs"
 )
 
 const (
@@ -18,17 +19,19 @@ const (
 )
 
 func main() {
+	filesystem := elkfs.Filesystem{}
+
 	cfg, err := config.Get()
 	if err != nil {
 		fatal(err)
 	}
 
-	paths, err := discoverOverridePaths()
+	paths, err := discoverOverridePaths(filesystem)
 	if err != nil {
 		fatal(err)
 	}
 	for _, path := range paths {
-		data, err := os.ReadFile(path)
+		data, err := filesystem.Read(path)
 		if err != nil {
 			fatal(fmt.Errorf("read %s: %w", path, err))
 		}
@@ -46,33 +49,45 @@ func main() {
 	}
 }
 
-func discoverOverridePaths() ([]string, error) {
+func discoverOverridePaths(filesystem elkfs.FS) ([]string, error) {
 	paths := []string{}
-	if _, err := os.Stat(mainConfigPath); err == nil {
-		paths = append(paths, mainConfigPath)
-	} else if !errors.Is(err, fs.ErrNotExist) {
-		return nil, err
+	mainStat, err := filesystem.Stat(mainConfigPath)
+	if err == nil {
+		if mainStat.IsRegular {
+			paths = append(paths, mainConfigPath)
+		}
+	} else if !errors.Is(err, iofs.ErrNotExist) {
+		return nil, fmt.Errorf("stat %s: %w", mainConfigPath, err)
 	}
 
-	entries, err := os.ReadDir(dropInPath)
-	if errors.Is(err, fs.ErrNotExist) {
+	dropInStat, err := filesystem.Stat(dropInPath)
+	if errors.Is(err, iofs.ErrNotExist) {
 		return paths, nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("stat %s: %w", dropInPath, err)
+	}
+	if !dropInStat.IsDir {
+		return nil, fmt.Errorf("%s: %w", dropInPath, iofs.ErrInvalid)
+	}
+
+	entries, err := filesystem.ReadDir(dropInPath)
+	if err != nil {
+		return nil, fmt.Errorf("read directory %s: %w", dropInPath, err)
 	}
 
 	var dropIns []string
 	for _, entry := range entries {
-		if entry.IsDir() || entry.Name()[0] == '.' || filepath.Ext(entry.Name()) != ".conf" {
+		if entry.Name() == "" || entry.Name()[0] == '.' || filepath.Ext(entry.Name()) != ".conf" {
 			continue
 		}
-		info, err := entry.Info()
+		entryPath := filepath.Join(dropInPath, entry.Name())
+		entryStat, err := filesystem.Stat(entryPath)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("stat %s: %w", entryPath, err)
 		}
-		if info.Mode().IsRegular() {
-			dropIns = append(dropIns, filepath.Join(dropInPath, entry.Name()))
+		if entryStat.IsRegular {
+			dropIns = append(dropIns, entryPath)
 		}
 	}
 	sort.Strings(dropIns)

@@ -11,7 +11,7 @@ import (
 var (
 	configOnce   sync.Once
 	cachedConfig Config
-	configErr    error
+	errConfig    error
 )
 
 // Get returns a copy of the configuration compiled into the binary. The
@@ -19,10 +19,10 @@ var (
 // process. If decoding fails, the same error is returned on subsequent calls.
 func Get() (Config, error) {
 	configOnce.Do(func() {
-		cachedConfig, configErr = loadDefaultConfig()
+		cachedConfig, errConfig = loadDefaultConfig()
 	})
-	if configErr != nil {
-		return Config{}, configErr
+	if errConfig != nil {
+		return Config{}, errConfig
 	}
 	return cachedConfig, nil
 }
