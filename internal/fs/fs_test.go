@@ -18,6 +18,7 @@ func TestFilesystemRead(t *testing.T) {
 
 	directory := t.TempDir()
 	path := filepath.Join(directory, "configuration.conf")
+
 	contents := []byte("configuration")
 	if err := os.WriteFile(path, contents, 0o640); err != nil {
 		t.Fatal(err)
@@ -27,6 +28,7 @@ func TestFilesystemRead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Read() error = %v", err)
 	}
+
 	if string(got) != string(contents) {
 		t.Fatalf("Read() = %q, want %q", got, contents)
 	}
@@ -56,9 +58,11 @@ func TestFilesystemReadRejectsSymlink(t *testing.T) {
 	directory := t.TempDir()
 	target := filepath.Join(directory, "target.conf")
 	link := filepath.Join(directory, "link.conf")
+
 	if err := os.WriteFile(target, []byte("configuration"), 0o640); err != nil {
 		t.Fatal(err)
 	}
+
 	if err := os.Symlink(target, link); err != nil {
 		t.Fatal(err)
 	}
@@ -79,9 +83,11 @@ func TestFilesystemStatRejectsSymlink(t *testing.T) {
 	directory := t.TempDir()
 	target := filepath.Join(directory, "target.conf")
 	link := filepath.Join(directory, "link.conf")
+
 	if err := os.WriteFile(target, []byte("configuration"), 0o640); err != nil {
 		t.Fatal(err)
 	}
+
 	if err := os.Symlink(target, link); err != nil {
 		t.Fatal(err)
 	}

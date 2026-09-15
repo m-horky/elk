@@ -33,9 +33,11 @@ func TestGetReturnsEmbeddedDefaults(t *testing.T) {
 	if !got.Compatibility.InterpretLegacy {
 		t.Error("Get().Compatibility.InterpretLegacy = false, want true")
 	}
+
 	if got.HTTP.Timeout.Connect != 30 || got.HTTP.Timeout.Idle != 120 {
 		t.Errorf("Get().HTTP.Timeout = %+v, want connect 30 and idle 120", got.HTTP.Timeout)
 	}
+
 	if got.API.Subscriptions.URI != "https://subscription.rhsm.redhat.com/subscription" {
 		t.Errorf("Get().API.Subscriptions.URI = %q, want embedded default", got.API.Subscriptions.URI)
 	}
@@ -64,9 +66,11 @@ func TestConfigUpdatePreservesAbsentValues(t *testing.T) {
 	if got.HTTP.Timeout.Connect != 0 {
 		t.Errorf("Connect = %d, want 0", got.HTTP.Timeout.Connect)
 	}
+
 	if got.HTTP.Timeout.Idle != 120 {
 		t.Errorf("Idle = %d, want unchanged value 120", got.HTTP.Timeout.Idle)
 	}
+
 	if got.HTTP.Proxy.URI != "https://proxy.example" || got.HTTP.Proxy.User != "user" {
 		t.Errorf("Proxy = %+v, want unchanged proxy", got.HTTP.Proxy)
 	}
@@ -99,9 +103,11 @@ func TestConfigUpdateAppliesExplicitZeroValues(t *testing.T) {
 	if got.Compatibility.InterpretLegacy {
 		t.Error("InterpretLegacy = true, want false")
 	}
+
 	if got.HTTP.Timeout.Connect != 0 {
 		t.Errorf("Connect = %d, want 0", got.HTTP.Timeout.Connect)
 	}
+
 	if got.HTTP.Proxy.URI != "" {
 		t.Errorf("Proxy.URI = %q, want empty string", got.HTTP.Proxy.URI)
 	}
@@ -133,12 +139,15 @@ func TestConfigUpdateAppliesNestedEndpoints(t *testing.T) {
 	if got.API.Subscriptions.URI != "subscriptions" {
 		t.Errorf("Subscriptions.URI = %q", got.API.Subscriptions.URI)
 	}
+
 	if got.API.Content.RPM.URI != "rpm" {
 		t.Errorf("Content.RPM.URI = %q", got.API.Content.RPM.URI)
 	}
+
 	if got.API.Insights.Ingress.URI != "ingress" {
 		t.Errorf("Insights.Ingress.URI = %q", got.API.Insights.Ingress.URI)
 	}
+
 	if got.API.Insights.Inventory.URI != "inventory" {
 		t.Errorf("Insights.Inventory.URI = %q", got.API.Insights.Inventory.URI)
 	}
@@ -156,13 +165,15 @@ func (f configTestFS) Read(path string) ([]byte, error) {
 	if !ok {
 		return nil, &os.PathError{Op: "read", Path: path, Err: iofs.ErrNotExist}
 	}
+
 	return data, nil
 }
 
 func (f configTestFS) ReadDir(path string) ([]os.DirEntry, error) {
 	if path != dropInPath {
-		return nil, errors.New("unexpected ReadDir path")
+		return nil, errors.New("unexpected ReadDir path") //nolint:err113
 	}
+
 	return f.entries, nil
 }
 
@@ -170,15 +181,17 @@ func (f configTestFS) Stat(path string) (elkfs.FileInfo, error) {
 	if err := f.statErr[path]; err != nil {
 		return elkfs.FileInfo{}, err
 	}
+
 	info, ok := f.stats[path]
 	if !ok {
 		return elkfs.FileInfo{}, &os.PathError{Op: "stat", Path: path, Err: iofs.ErrNotExist}
 	}
+
 	return info, nil
 }
 
 func (f configTestFS) Open(string) (elkfs.File, error) { //nolint:ireturn // required by elkfs.FS
-	return nil, errors.New("unexpected Open call")
+	return nil, errors.New("unexpected Open call") //nolint:err113
 }
 
 type configTestDirEntry struct {
@@ -229,6 +242,7 @@ func TestDiscoverOverridePaths(t *testing.T) {
 	if err != nil {
 		t.Fatalf("discoverOverridePaths() error = %v", err)
 	}
+
 	want := []string{mainConfigPath, filepath.Join(dropInPath, "10-site.conf"), filepath.Join(dropInPath, "20-site.conf")}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("discoverOverridePaths() = %v, want %v", got, want)
@@ -247,6 +261,7 @@ func TestDiscoverOverridePathsAllowsMissingFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("discoverOverridePaths() error = %v", err)
 	}
+
 	if len(got) != 0 {
 		t.Fatalf("discoverOverridePaths() = %v, want no paths", got)
 	}
@@ -260,8 +275,12 @@ func TestDiscoverOverridePathsAllowsMissingFiles(t *testing.T) {
 func TestDiscoverOverridePathsPropagatesStatError(t *testing.T) {
 	t.Parallel()
 
-	statErr := errors.New("permission denied")
-	_, err := discoverOverridePaths(configTestFS{statErr: map[string]error{mainConfigPath: statErr}}, mainConfigPath, dropInPath)
+	statErr := errors.New("permission denied") //nolint:err113
+
+	filesystem := new(configTestFS)
+	filesystem.statErr = map[string]error{mainConfigPath: statErr}
+
+	_, err := discoverOverridePaths(*filesystem, mainConfigPath, dropInPath)
 	if !errors.Is(err, statErr) {
 		t.Fatalf("discoverOverridePaths() error = %v, want %v", err, statErr)
 	}
@@ -299,9 +318,11 @@ func TestLoadConfigAppliesOverrides(t *testing.T) {
 	if err != nil {
 		t.Fatalf("loadConfig() error = %v", err)
 	}
+
 	if got.HTTP.Timeout.Connect != 20 {
 		t.Errorf("HTTP.Timeout.Connect = %d, want 20", got.HTTP.Timeout.Connect)
 	}
+
 	if got.HTTP.Timeout.Idle != 120 {
 		t.Errorf("HTTP.Timeout.Idle = %d, want default 120", got.HTTP.Timeout.Idle)
 	}

@@ -14,8 +14,8 @@ import (
 )
 
 var (
-	configOnce   sync.Once
-	cachedConfig Config
+	configOnce   sync.Once //nolint:gochecknoglobals
+	cachedConfig Config    //nolint:gochecknoglobals
 	errConfig    error
 )
 
@@ -34,9 +34,11 @@ func Get(source Source) (Config, error) {
 	configOnce.Do(func() {
 		cachedConfig, errConfig = loadConfig(source)
 	})
+
 	if errConfig != nil {
 		return Config{}, errConfig
 	}
+
 	return cachedConfig, nil
 }
 
@@ -50,22 +52,27 @@ func loadConfig(source Source) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+
 	for _, path := range paths {
 		data, err := source.Filesystem.Read(path)
 		if err != nil {
 			return Config{}, fmt.Errorf("read %s: %w", path, err)
 		}
+
 		var override Partial
 		if _, err := toml.Decode(string(data), &override); err != nil {
 			return Config{}, fmt.Errorf("decode %s: %w", path, err)
 		}
+
 		cfg = cfg.Update(override)
 	}
+
 	return cfg, nil
 }
 
 func discoverOverridePaths(filesystem elkfs.FS, mainPath, dropInPath string) ([]string, error) {
 	paths := []string{}
+
 	mainStat, err := filesystem.Stat(mainPath)
 	if err == nil {
 		if mainStat.IsRegular {
@@ -79,9 +86,11 @@ func discoverOverridePaths(filesystem elkfs.FS, mainPath, dropInPath string) ([]
 	if errors.Is(err, iofs.ErrNotExist) {
 		return paths, nil
 	}
+
 	if err != nil {
 		return nil, fmt.Errorf("stat %s: %w", dropInPath, err)
 	}
+
 	if !dropInStat.IsDir {
 		return nil, fmt.Errorf("%s: %w", dropInPath, iofs.ErrInvalid)
 	}
@@ -90,21 +99,28 @@ func discoverOverridePaths(filesystem elkfs.FS, mainPath, dropInPath string) ([]
 	if err != nil {
 		return nil, fmt.Errorf("read directory %s: %w", dropInPath, err)
 	}
+
 	var dropIns []string
+
 	for _, entry := range entries {
 		if entry.Name() == "" || entry.Name()[0] == '.' || filepath.Ext(entry.Name()) != ".conf" {
 			continue
 		}
+
 		path := filepath.Join(dropInPath, entry.Name())
+
 		stat, err := filesystem.Stat(path)
 		if err != nil {
 			return nil, fmt.Errorf("stat %s: %w", path, err)
 		}
+
 		if stat.IsRegular {
 			dropIns = append(dropIns, path)
 		}
 	}
+
 	sort.Strings(dropIns)
+
 	return append(paths, dropIns...), nil
 }
 
@@ -115,6 +131,7 @@ func loadDefaultConfig() (Config, error) {
 	}
 
 	cfg := (Config{}).Update(p)
+
 	return cfg, nil
 }
 
@@ -126,25 +143,30 @@ func (cfg Config) Update(p Partial) Config {
 		cfg.Compatibility.InterpretLegacy = *p.Compatibility.InterpretLegacyConfigurations
 	}
 
-	if p.HTTP != nil {
+	if p.HTTP != nil { //nolint:nestif
 		if p.HTTP.Timeout != nil {
 			if p.HTTP.Timeout.Connect != nil {
 				cfg.HTTP.Timeout.Connect = *p.HTTP.Timeout.Connect
 			}
+
 			if p.HTTP.Timeout.Idle != nil {
 				cfg.HTTP.Timeout.Idle = *p.HTTP.Timeout.Idle
 			}
 		}
+
 		if p.HTTP.Proxy != nil {
 			if p.HTTP.Proxy.URI != nil {
 				cfg.HTTP.Proxy.URI = *p.HTTP.Proxy.URI
 			}
+
 			if p.HTTP.Proxy.User != nil {
 				cfg.HTTP.Proxy.User = *p.HTTP.Proxy.User
 			}
+
 			if p.HTTP.Proxy.Password != nil {
 				cfg.HTTP.Proxy.Password = *p.HTTP.Proxy.Password
 			}
+
 			if p.HTTP.Proxy.NoProxy != nil {
 				cfg.HTTP.Proxy.NoProxy = *p.HTTP.Proxy.NoProxy
 			}
@@ -154,20 +176,25 @@ func (cfg Config) Update(p Partial) Config {
 	if p.API == nil {
 		return cfg
 	}
+
 	if p.API.Subscriptions != nil {
 		cfg.API.Subscriptions = cfg.API.Subscriptions.Update(*p.API.Subscriptions)
 	}
+
 	if p.API.Content != nil && p.API.Content.RPM != nil {
 		cfg.API.Content.RPM = cfg.API.Content.RPM.Update(*p.API.Content.RPM)
 	}
+
 	if p.API.Insights != nil {
 		if p.API.Insights.Ingress != nil {
 			cfg.API.Insights.Ingress = cfg.API.Insights.Ingress.Update(*p.API.Insights.Ingress)
 		}
+
 		if p.API.Insights.Inventory != nil {
 			cfg.API.Insights.Inventory = cfg.API.Insights.Inventory.Update(*p.API.Insights.Inventory)
 		}
 	}
+
 	return cfg
 }
 
@@ -176,11 +203,14 @@ func (e Endpoint) Update(p PartialAPIHost) Endpoint {
 	if p.URI != nil {
 		e.URI = *p.URI
 	}
+
 	if p.TLSVerify != nil {
 		e.TLSVerify = *p.TLSVerify
 	}
+
 	if p.CAPath != nil {
 		e.CAPath = *p.CAPath
 	}
+
 	return e
 }

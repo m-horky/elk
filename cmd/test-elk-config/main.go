@@ -15,6 +15,7 @@ func main() {
 	}
 
 	enc := toml.NewEncoder(os.Stdout)
+
 	enc.Indent = ""
 	if err := enc.Encode(cfg); err != nil {
 		fatal(fmt.Errorf("write configuration: %w", err))

@@ -71,7 +71,8 @@ func openat2(dirfd int, path string, flags int, resolve uint64) (*os.File, error
 		return nil, fmt.Errorf("convert path for openat2: %w", err)
 	}
 
-	how := openHow{Flags: uint64(flags), Resolve: resolve}
+	how := openHow{Flags: uint64(flags), Mode: 0, Resolve: resolve}
+
 	fd, _, errno := syscall.Syscall6(
 		sysOpenat2,
 		uintptr(int64(dirfd)),
@@ -84,6 +85,7 @@ func openat2(dirfd int, path string, flags int, resolve uint64) (*os.File, error
 	if errno != 0 {
 		return nil, errno
 	}
+
 	return os.NewFile(fd, path), nil
 }
 
@@ -113,6 +115,7 @@ func (Filesystem) Open(path string) (File, error) {
 	if err != nil {
 		return nil, &os.PathError{Op: "open", Path: path, Err: err}
 	}
+
 	return osFile{file}, nil
 }
 
@@ -127,21 +130,27 @@ func (filesystem Filesystem) Read(path string) ([]byte, error) {
 	info, err := file.Stat()
 	if err != nil {
 		_ = file.Close()
+
 		return nil, fmt.Errorf("stat %s: %w", path, err)
 	}
+
 	if !info.IsRegular || info.IsSymlink {
 		_ = file.Close()
+
 		return nil, &os.PathError{Op: "read", Path: path, Err: syscall.EISDIR}
 	}
 
 	data, readErr := io.ReadAll(file)
 	closeErr := file.Close()
+
 	if readErr != nil {
 		return nil, fmt.Errorf("read %s: %w", path, readErr)
 	}
+
 	if closeErr != nil {
 		return nil, fmt.Errorf("close %s: %w", path, closeErr)
 	}
+
 	return data, nil
 }
 
@@ -153,6 +162,7 @@ func (f osFile) Stat() (FileInfo, error) {
 	if err != nil {
 		return FileInfo{}, &os.PathError{Op: "stat", Path: f.Name(), Err: err}
 	}
+
 	return metadata(info), nil
 }
 
@@ -160,8 +170,11 @@ func (f osFile) Stat() (FileInfo, error) {
 // platform-neutral metadata representation.
 func metadata(info os.FileInfo) FileInfo {
 	mode := info.Mode()
+
 	m := FileInfo{
 		Mode:      mode,
+		UID:       0,
+		GID:       0,
 		IsDir:     info.IsDir(),
 		IsRegular: mode.IsRegular(),
 		IsSymlink: mode&os.ModeSymlink != 0,
@@ -169,6 +182,7 @@ func metadata(info os.FileInfo) FileInfo {
 	if stat, ok := info.Sys().(*syscall.Stat_t); ok {
 		m.UID, m.GID = stat.Uid, stat.Gid
 	}
+
 	return m
 }
 
@@ -179,6 +193,7 @@ func (Filesystem) ReadDir(path string) ([]os.DirEntry, error) {
 	if err != nil {
 		return nil, &os.PathError{Op: "readdir", Path: path, Err: err}
 	}
+
 	return entries, nil
 }
 
@@ -188,8 +203,10 @@ func (Filesystem) Stat(path string) (FileInfo, error) {
 	if err != nil {
 		return FileInfo{}, &os.PathError{Op: "stat", Path: path, Err: err}
 	}
+
 	if info.Mode()&os.ModeSymlink != 0 {
 		return FileInfo{}, &os.PathError{Op: "stat", Path: path, Err: syscall.ELOOP}
 	}
+
 	return metadata(info), nil
 }
