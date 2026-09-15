@@ -17,6 +17,7 @@ type PartialHTTP struct {
 
 type PartialHTTPTimeout struct {
 	Connect *int `toml:"connect"`
+	Request *int `toml:"request"`
 	Idle    *int `toml:"idle"`
 }
 

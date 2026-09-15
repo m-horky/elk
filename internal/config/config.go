@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/BurntSushi/toml"
 	"github.com/m-horky/elk/data/etc"
@@ -124,6 +125,14 @@ func discoverOverridePaths(filesystem elkfs.FS, mainPath, dropInPath string) ([]
 	return append(paths, dropIns...), nil
 }
 
+func seconds(value int) time.Duration {
+	if value <= 0 {
+		return 0
+	}
+
+	return time.Duration(value) * time.Second
+}
+
 func loadDefaultConfig() (Config, error) {
 	var p Partial
 	if _, err := toml.Decode(etc.ElkDefaultToml, &p); err != nil {
@@ -146,11 +155,15 @@ func (cfg Config) Update(p Partial) Config {
 	if p.HTTP != nil { //nolint:nestif
 		if p.HTTP.Timeout != nil {
 			if p.HTTP.Timeout.Connect != nil {
-				cfg.HTTP.Timeout.Connect = *p.HTTP.Timeout.Connect
+				cfg.HTTP.Timeout.Connect = seconds(*p.HTTP.Timeout.Connect)
+			}
+
+			if p.HTTP.Timeout.Request != nil {
+				cfg.HTTP.Timeout.Request = seconds(*p.HTTP.Timeout.Request)
 			}
 
 			if p.HTTP.Timeout.Idle != nil {
-				cfg.HTTP.Timeout.Idle = *p.HTTP.Timeout.Idle
+				cfg.HTTP.Timeout.Idle = seconds(*p.HTTP.Timeout.Idle)
 			}
 		}
 

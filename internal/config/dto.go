@@ -1,5 +1,7 @@
 package config
 
+import "time"
+
 type Compatibility struct {
 	InterpretLegacy bool `toml:"interpret-legacy-configurations"`
 }
@@ -22,8 +24,9 @@ type Endpoint struct {
 }
 
 type Timeout struct {
-	Connect int `toml:"connect"`
-	Idle    int `toml:"idle"`
+	Connect time.Duration `toml:"connect"`
+	Request time.Duration `toml:"request"`
+	Idle    time.Duration `toml:"idle"`
 }
 
 type Proxy struct {

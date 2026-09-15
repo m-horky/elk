@@ -34,8 +34,10 @@ func TestGetReturnsEmbeddedDefaults(t *testing.T) {
 		t.Error("Get().Compatibility.InterpretLegacy = false, want true")
 	}
 
-	if got.HTTP.Timeout.Connect != 30 || got.HTTP.Timeout.Idle != 120 {
-		t.Errorf("Get().HTTP.Timeout = %+v, want connect 30 and idle 120", got.HTTP.Timeout)
+	if got.HTTP.Timeout.Connect != 30*time.Second ||
+		got.HTTP.Timeout.Request != 30*time.Second ||
+		got.HTTP.Timeout.Idle != 120*time.Second {
+		t.Errorf("Get().HTTP.Timeout = %+v, want connect 30s, request 30s, and idle 120s", got.HTTP.Timeout)
 	}
 
 	if got.API.Subscriptions.URI != "https://subscription.rhsm.redhat.com/subscription" {
@@ -52,7 +54,7 @@ func TestConfigUpdatePreservesAbsentValues(t *testing.T) {
 
 	base := Config{
 		HTTP: HTTP{
-			Timeout: Timeout{Connect: 30, Idle: 120},
+			Timeout: Timeout{Connect: 30 * time.Second, Idle: 120 * time.Second},
 			Proxy:   Proxy{URI: "https://proxy.example", User: "user"},
 		},
 	}
@@ -67,8 +69,8 @@ func TestConfigUpdatePreservesAbsentValues(t *testing.T) {
 		t.Errorf("Connect = %d, want 0", got.HTTP.Timeout.Connect)
 	}
 
-	if got.HTTP.Timeout.Idle != 120 {
-		t.Errorf("Idle = %d, want unchanged value 120", got.HTTP.Timeout.Idle)
+	if got.HTTP.Timeout.Idle != 120*time.Second {
+		t.Errorf("Idle = %d, want unchanged value 120s", got.HTTP.Timeout.Idle)
 	}
 
 	if got.HTTP.Proxy.URI != "https://proxy.example" || got.HTTP.Proxy.User != "user" {
@@ -87,7 +89,7 @@ func TestConfigUpdateAppliesExplicitZeroValues(t *testing.T) {
 	base := Config{
 		Compatibility: Compatibility{InterpretLegacy: true},
 		HTTP: HTTP{
-			Timeout: Timeout{Connect: 30},
+			Timeout: Timeout{Connect: 30 * time.Second},
 			Proxy:   Proxy{URI: "https://proxy.example"},
 		},
 	}
@@ -306,7 +308,7 @@ func TestLoadConfigAppliesOverrides(t *testing.T) {
 		},
 		files: map[string][]byte{
 			filepath.Join(dropInPath, "10-site.conf"): []byte("[http.timeout]\nconnect = 10\n"),
-			filepath.Join(dropInPath, "20-site.conf"): []byte("[http.timeout]\nconnect = 20\n"),
+			filepath.Join(dropInPath, "20-site.conf"): []byte("[http.timeout]\nconnect = 20\nrequest = 25\n"),
 		},
 	}
 
@@ -319,11 +321,15 @@ func TestLoadConfigAppliesOverrides(t *testing.T) {
 		t.Fatalf("loadConfig() error = %v", err)
 	}
 
-	if got.HTTP.Timeout.Connect != 20 {
-		t.Errorf("HTTP.Timeout.Connect = %d, want 20", got.HTTP.Timeout.Connect)
+	if got.HTTP.Timeout.Connect != 20*time.Second {
+		t.Errorf("HTTP.Timeout.Connect = %d, want 20s", got.HTTP.Timeout.Connect)
 	}
 
-	if got.HTTP.Timeout.Idle != 120 {
-		t.Errorf("HTTP.Timeout.Idle = %d, want default 120", got.HTTP.Timeout.Idle)
+	if got.HTTP.Timeout.Request != 25*time.Second {
+		t.Errorf("HTTP.Timeout.Request = %d, want 25s", got.HTTP.Timeout.Request)
+	}
+
+	if got.HTTP.Timeout.Idle != 120*time.Second {
+		t.Errorf("HTTP.Timeout.Idle = %d, want default 120s", got.HTTP.Timeout.Idle)
 	}
 }

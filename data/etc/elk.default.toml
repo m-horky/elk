@@ -3,6 +3,7 @@ interpret-legacy-configurations = true
 
 [http.timeout]
 connect = 30
+request = 30
 idle = 120
 
 [http.proxy]
