@@ -28,27 +28,21 @@ type PartialHTTPProxy struct {
 }
 
 type PartialAPI struct {
-	Subscriptions *PartialAPISubscriptions `toml:"subscriptions"`
-	Content       *PartialAPIContent       `toml:"content"`
-	Insights      *PartialAPIInsights      `toml:"insights"`
+	Subscriptions *PartialAPIHost     `toml:"subscriptions"`
+	Content       *PartialAPIContent  `toml:"content"`
+	Insights      *PartialAPIInsights `toml:"insights"`
 }
 
 type PartialAPIContent struct {
-	RPM *PartialEndpoint `toml:"rpm"`
+	RPM *PartialAPIHost `toml:"rpm"`
 }
 
 type PartialAPIInsights struct {
-	Ingress   *PartialEndpoint `toml:"ingress"`
-	Inventory *PartialEndpoint `toml:"inventory"`
+	Ingress   *PartialAPIHost `toml:"ingress"`
+	Inventory *PartialAPIHost `toml:"inventory"`
 }
 
-type PartialEndpoint struct {
-	URI       *string `toml:"uri"`
-	TLSVerify *bool   `toml:"tls-verify"`
-	CAPath    *string `toml:"ca-path"`
-}
-
-type PartialAPISubscriptions struct {
+type PartialAPIHost struct {
 	URI       *string `toml:"uri"`
 	TLSVerify *bool   `toml:"tls-verify"`
 	CAPath    *string `toml:"ca-path"`

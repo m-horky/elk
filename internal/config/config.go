@@ -1,11 +1,16 @@
 package config
 
 import (
+	"errors"
 	"fmt"
+	iofs "io/fs"
+	"path/filepath"
+	"sort"
 	"sync"
 
 	"github.com/BurntSushi/toml"
 	"github.com/m-horky/elk/data/etc"
+	elkfs "github.com/m-horky/elk/internal/fs"
 )
 
 var (
@@ -14,17 +19,93 @@ var (
 	errConfig    error
 )
 
-// Get returns a copy of the configuration compiled into the binary. The
-// configuration is decoded at most once and cached for the lifetime of the
-// process. If decoding fails, the same error is returned on subsequent calls.
-func Get() (Config, error) {
+// Source describes where configuration overrides are loaded from.
+type Source struct {
+	Filesystem elkfs.FS
+	MainPath   string
+	DropInsDir string
+}
+
+// Get returns a copy of the configuration assembled from the embedded
+// defaults and the supplied configuration source. Configuration is loaded at
+// most once and cached for the lifetime of the process. If loading fails, the
+// same error is returned on subsequent calls.
+func Get(source Source) (Config, error) {
 	configOnce.Do(func() {
-		cachedConfig, errConfig = loadDefaultConfig()
+		cachedConfig, errConfig = loadConfig(source)
 	})
 	if errConfig != nil {
 		return Config{}, errConfig
 	}
 	return cachedConfig, nil
+}
+
+func loadConfig(source Source) (Config, error) {
+	cfg, err := loadDefaultConfig()
+	if err != nil {
+		return Config{}, err
+	}
+
+	paths, err := discoverOverridePaths(source.Filesystem, source.MainPath, source.DropInsDir)
+	if err != nil {
+		return Config{}, err
+	}
+	for _, path := range paths {
+		data, err := source.Filesystem.Read(path)
+		if err != nil {
+			return Config{}, fmt.Errorf("read %s: %w", path, err)
+		}
+		var override Partial
+		if _, err := toml.Decode(string(data), &override); err != nil {
+			return Config{}, fmt.Errorf("decode %s: %w", path, err)
+		}
+		cfg = cfg.Update(override)
+	}
+	return cfg, nil
+}
+
+func discoverOverridePaths(filesystem elkfs.FS, mainPath, dropInPath string) ([]string, error) {
+	paths := []string{}
+	mainStat, err := filesystem.Stat(mainPath)
+	if err == nil {
+		if mainStat.IsRegular {
+			paths = append(paths, mainPath)
+		}
+	} else if !errors.Is(err, iofs.ErrNotExist) {
+		return nil, fmt.Errorf("stat %s: %w", mainPath, err)
+	}
+
+	dropInStat, err := filesystem.Stat(dropInPath)
+	if errors.Is(err, iofs.ErrNotExist) {
+		return paths, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("stat %s: %w", dropInPath, err)
+	}
+	if !dropInStat.IsDir {
+		return nil, fmt.Errorf("%s: %w", dropInPath, iofs.ErrInvalid)
+	}
+
+	entries, err := filesystem.ReadDir(dropInPath)
+	if err != nil {
+		return nil, fmt.Errorf("read directory %s: %w", dropInPath, err)
+	}
+	var dropIns []string
+	for _, entry := range entries {
+		if entry.Name() == "" || entry.Name()[0] == '.' || filepath.Ext(entry.Name()) != ".conf" {
+			continue
+		}
+		path := filepath.Join(dropInPath, entry.Name())
+		stat, err := filesystem.Stat(path)
+		if err != nil {
+			return nil, fmt.Errorf("stat %s: %w", path, err)
+		}
+		if stat.IsRegular {
+			dropIns = append(dropIns, path)
+		}
+	}
+	sort.Strings(dropIns)
+	return append(paths, dropIns...), nil
 }
 
 func loadDefaultConfig() (Config, error) {
@@ -90,22 +171,8 @@ func (cfg Config) Update(p Partial) Config {
 	return cfg
 }
 
-// Update returns a copy of s with values present in p applied.
-func (s Subscriptions) Update(p PartialAPISubscriptions) Subscriptions {
-	if p.URI != nil {
-		s.URI = *p.URI
-	}
-	if p.TLSVerify != nil {
-		s.TLSVerify = *p.TLSVerify
-	}
-	if p.CAPath != nil {
-		s.CAPath = *p.CAPath
-	}
-	return s
-}
-
 // Update returns a copy of e with values present in p applied.
-func (e Endpoint) Update(p PartialEndpoint) Endpoint {
+func (e Endpoint) Update(p PartialAPIHost) Endpoint {
 	if p.URI != nil {
 		e.URI = *p.URI
 	}
