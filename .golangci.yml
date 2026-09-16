@@ -12,7 +12,6 @@ linters:
     - durationcheck
     - dupword
     - embeddedstructfieldcheck
-    - err113
     - errcheck
     - errchkjson
     - errname

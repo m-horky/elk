@@ -10,8 +10,9 @@ import (
 )
 
 const (
-	defaultConfigDir = "/etc/elk"
-	configDirEnv     = "ELK_CONFIG_DIR"
+	defaultConfigDir  = "/etc/elk"
+	defaultLegacyPath = "/etc/rhsm/rhsm.conf"
+	configDirEnv      = "ELK_CONFIG_DIR"
 )
 
 // Config is the resolved application configuration.
@@ -29,6 +30,7 @@ func Get() (Config, error) {
 		Filesystem: elkfs.Filesystem{},
 		MainPath:   filepath.Join(dir, "elk.conf"),
 		DropInsDir: filepath.Join(dir, "elk.conf.d"),
+		LegacyPath: defaultLegacyPath,
 	}
 
 	cfg, err := internalconfig.Get(source)

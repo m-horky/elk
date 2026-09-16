@@ -23,8 +23,14 @@ var (
 // Source describes where configuration overrides are loaded from.
 type Source struct {
 	Filesystem elkfs.FS
-	MainPath   string
+	// MainPath is a path to a file where main configuration file exists.
+	MainPath string
+	// DropInsDir is a path to a directory where drop-in configuration files
+	// may be placed.
 	DropInsDir string
+	// LegacyPath is a path to rhsm.conf, which is used as an additional source
+	// of configuration options, unless disabled.
+	LegacyPath string
 }
 
 // Get returns a copy of the configuration assembled from the embedded
@@ -43,17 +49,17 @@ func Get(source Source) (Config, error) {
 	return cachedConfig, nil
 }
 
+// loadConfig assembles configuration from embedded defaults and the supplied
+// legacy, main, and drop-in configuration sources.
 func loadConfig(source Source) (Config, error) {
-	cfg, err := loadDefaultConfig()
-	if err != nil {
-		return Config{}, err
-	}
-
+	// Find the main configuration file and drop-ins in their application order.
 	paths, err := discoverOverridePaths(source.Filesystem, source.MainPath, source.DropInsDir)
 	if err != nil {
 		return Config{}, err
 	}
 
+	// Read and decode each override configuration file.
+	partials := make([]Partial, 0, len(paths))
 	for _, path := range paths {
 		data, err := source.Filesystem.Read(path)
 		if err != nil {
@@ -65,12 +71,42 @@ func loadConfig(source Source) (Config, error) {
 			return Config{}, fmt.Errorf("decode %s: %w", path, err)
 		}
 
-		cfg = cfg.Update(override)
+		partials = append(partials, override)
+	}
+
+	// Start from the embedded configuration, which provides values for all fields.
+	defaults, err := loadDefaultConfig()
+	if err != nil {
+		return Config{}, err
+	}
+
+	// Resolve the `interpret-legacy-configurations` option.
+	effective := defaults
+	for _, partial := range partials {
+		effective = effective.Update(partial)
+	}
+
+	// Load the legacy source only when the Elk configuration enables it.
+	legacy := Partial{}
+	if effective.Compatibility.InterpretLegacy && source.LegacyPath != "" {
+		legacy, err = LoadRHSM(source.Filesystem, source.LegacyPath)
+		if err != nil {
+			return Config{}, err
+		}
+	}
+
+	cfg := defaults.Update(legacy)
+
+	// Apply Elk overrides on top the built-in and legacy options.
+	for _, partial := range partials {
+		cfg = cfg.Update(partial)
 	}
 
 	return cfg, nil
 }
 
+// discoverOverridePaths returns a list of configuration files
+// (main one, then the drop-ins) in the order in which they should be applied.
 func discoverOverridePaths(filesystem elkfs.FS, mainPath, dropInPath string) ([]string, error) {
 	paths := []string{}
 
