@@ -15,3 +15,9 @@ To format files in place, run:
 ```sh
 make fmt
 ```
+
+Build the example binaries into `./build/` with:
+
+```sh
+make build
+```

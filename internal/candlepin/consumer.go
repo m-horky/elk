@@ -51,6 +51,23 @@ func (c *Client) CreateConsumer(
 		return Consumer{}, fmt.Errorf("create consumer: %w", err)
 	}
 
-	slog.Debug("Candlepin consumer received", "uuid_present", consumer.UUID != "", "identity_certificate_present", consumer.IDCert != nil)
+	slog.Debug("Candlepin consumer received")
 	return consumer, nil
+}
+
+// DeleteConsumer removes a consumer by UUID.
+func (c *Client) DeleteConsumer(ctx context.Context, uuid string) error {
+	if uuid == "" {
+		return fmt.Errorf("consumer UUID must not be empty") //nolint:err113
+	}
+
+	// The configured subscriptions endpoint already includes the /subscription
+	// service path, so append only the consumer resource path here.
+	path := "/consumers/" + url.PathEscape(uuid)
+	slog.Debug("deleting Candlepin consumer", "uuid", uuid)
+	if _, err := c.http.DoJSON(ctx, http.MethodDelete, path, nil, nil, nil); err != nil {
+		return fmt.Errorf("delete consumer: %w", err)
+	}
+
+	return nil
 }

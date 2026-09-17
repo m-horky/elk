@@ -29,7 +29,7 @@ func run() error {
 	path := defaultLegacyPath
 
 	if len(os.Args) > 2 {
-		return fmt.Errorf("%w: usage: test-elk-config-rhsm [rhsm.conf]", errUsage)
+		return fmt.Errorf("%w: usage: elk-config-rhsm [rhsm.conf]", errUsage)
 	}
 
 	if len(os.Args) == 2 {
@@ -39,7 +39,7 @@ func run() error {
 	slog.Info("loading legacy configuration", "path", path)
 	partial, err := internalconfig.LoadRHSM(elkfs.Filesystem{}, path)
 	if err != nil {
-		return err
+		return fmt.Errorf("load legacy configuration: %w", err)
 	}
 
 	encoder := toml.NewEncoder(os.Stdout)

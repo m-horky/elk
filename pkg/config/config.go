@@ -19,6 +19,9 @@ const (
 // Config is the resolved application configuration.
 type Config = internalconfig.Config
 
+// Endpoint describes a configured service endpoint.
+type Endpoint = internalconfig.Endpoint
+
 // Get loads the embedded defaults and application overrides. ELK_CONFIG_DIR,
 // when set, replaces /etc/elk as the configuration directory.
 func Get() (Config, error) {

@@ -93,7 +93,10 @@ func New(cfg Config) (*Client, error) {
 		}
 	}
 
-	slog.Debug("HTTP client configured", "base_url", sanitizedURL(base), "tls_verify", cfg.TLSVerify, "insecure_tls", cfg.InsecureTLS, "custom_ca", roots != nil, "proxy", cfg.Proxy.URI != "", "request_timeout", cfg.RequestTimeout)
+	slog.Debug("HTTP client configured", "base_url", sanitizedURL(base),
+		"tls_verify", cfg.TLSVerify, "insecure_tls", cfg.InsecureTLS,
+		"custom_ca", roots != nil, "proxy", cfg.Proxy.URI != "",
+		"request_timeout", cfg.RequestTimeout)
 	tr := newTransport(cfg, roots)
 	cl := newHTTPClient(cfg, base, tr)
 
@@ -242,7 +245,7 @@ func (c *Client) DoJSON(ctx context.Context, method, p string, query url.Values,
 }
 
 //nolint:lll
-func (c *Client) do(ctx context.Context, method, p string, query url.Values, body io.Reader, responseBody any) (int, error) { //nolint:funcorder
+func (c *Client) do(ctx context.Context, method, p string, query url.Values, body io.Reader, responseBody any) (int, error) { //nolint:funcorder,funlen
 	u, err := c.URL(p)
 	if err != nil {
 		return 0, err

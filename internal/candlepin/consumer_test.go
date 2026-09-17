@@ -17,7 +17,7 @@ import (
 // Given a Candlepin server that accepts valid credentials
 // When owners are listed and a consumer is created
 // Then both operations succeed and return the decoded API objects.
-func TestBasicClientListsOwnersAndCreatesConsumer(t *testing.T) {
+func TestBasicClientListsOwnersAndCreatesConsumer(t *testing.T) { //nolint:funlen
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		username, password, ok := r.BasicAuth()
 		if !ok || username != "user" || password != "password" {
@@ -74,7 +74,7 @@ func TestBasicClientListsOwnersAndCreatesConsumer(t *testing.T) {
 	consumer, err := client.CreateConsumer(context.Background(), CreateConsumerRequest{
 		Name:  "test",
 		Type:  ConsumerType{Label: "system"},
-		Facts: NewFactsDTO(facts.Facts{SystemCertificateVersion: new("3.2")}),
+		Facts: NewFactsDTO(&facts.Facts{SystemCertificateVersion: new("3.2")}),
 	}, CreateConsumerOptions{Owner: "org-1"})
 	if err != nil {
 		t.Fatal(err)

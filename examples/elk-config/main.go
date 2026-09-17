@@ -23,7 +23,7 @@ func run() error {
 	slog.Info("loading configuration")
 	cfg, err := config.Get()
 	if err != nil {
-		return err
+		return fmt.Errorf("load configuration: %w", err)
 	}
 
 	enc := toml.NewEncoder(os.Stdout)
