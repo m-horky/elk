@@ -11,6 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/url"
@@ -92,6 +93,7 @@ func New(cfg Config) (*Client, error) {
 		}
 	}
 
+	slog.Debug("HTTP client configured", "base_url", sanitizedURL(base), "tls_verify", cfg.TLSVerify, "insecure_tls", cfg.InsecureTLS, "custom_ca", roots != nil, "proxy", cfg.Proxy.URI != "", "request_timeout", cfg.RequestTimeout)
 	tr := newTransport(cfg, roots)
 	cl := newHTTPClient(cfg, base, tr)
 
@@ -152,13 +154,16 @@ func newHTTPClient(cfg Config, base *url.URL, tr *http.Transport) *http.Client {
 	cl.Timeout = cfg.RequestTimeout
 	cl.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		if !cfg.AllowRedirects {
+			slog.Debug("HTTP redirect not followed", "url", sanitizedURL(req.URL), "reason", "redirects disabled")
 			return http.ErrUseLastResponse
 		}
 
 		if req.URL.Scheme != base.Scheme || !strings.EqualFold(req.URL.Host, base.Host) {
+			slog.Debug("HTTP redirect rejected", "url", sanitizedURL(req.URL), "reason", "origin not approved")
 			return fmt.Errorf("redirect to unapproved origin %q", sanitizedURL(req.URL)) //nolint:err113
 		}
 
+		slog.Debug("HTTP redirect followed", "url", sanitizedURL(req.URL))
 		return nil
 	}
 
@@ -263,18 +268,22 @@ func (c *Client) do(ctx context.Context, method, p string, query url.Values, bod
 		req.SetBasicAuth(c.basicAuth.Username, c.basicAuth.Password)
 	}
 
+	slog.Debug("HTTP request started", "method", req.Method, "url", sanitizedURL(req.URL), "body", body != nil)
+	started := time.Now()
 	resp, err := c.client.Do(req)
 	if err != nil {
 		if resp != nil && resp.Body != nil {
 			_ = resp.Body.Close()
 		}
 
+		slog.Debug("HTTP request failed", "method", req.Method, "url", sanitizedURL(req.URL), "duration", time.Since(started), "err", err)
 		return 0, err //nolint:wrapcheck
 	}
 
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		slog.Debug("HTTP response received", "method", req.Method, "url", sanitizedURL(req.URL), "status", resp.StatusCode, "duration", time.Since(started))
 		b, trunc := readErrorBody(resp.Body)
 
 		return resp.StatusCode, &HTTPError{
@@ -289,14 +298,17 @@ func (c *Client) do(ctx context.Context, method, p string, query url.Values, bod
 
 	if responseBody == nil {
 		_, _ = io.Copy(io.Discard, resp.Body)
+		slog.Debug("HTTP response received", "method", req.Method, "url", sanitizedURL(req.URL), "status", resp.StatusCode, "duration", time.Since(started))
 
 		return resp.StatusCode, nil
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(responseBody); err != nil {
+		slog.Debug("HTTP response JSON decode failed", "method", req.Method, "url", sanitizedURL(req.URL), "status", resp.StatusCode, "duration", time.Since(started), "err", err)
 		return resp.StatusCode, fmt.Errorf("decode JSON response: %w", err)
 	}
 
+	slog.Debug("HTTP response received", "method", req.Method, "url", sanitizedURL(req.URL), "status", resp.StatusCode, "duration", time.Since(started))
 	return resp.StatusCode, nil
 }
 

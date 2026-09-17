@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/m-horky/elk/internal/httpclient"
+	"github.com/m-horky/elk/pkg/facts"
 )
 
 // TestBasicClientListsOwnersAndCreatesConsumer verifies the BASIC-authenticated consumer flow.
@@ -40,6 +41,10 @@ func TestBasicClientListsOwnersAndCreatesConsumer(t *testing.T) {
 				t.Fatal(err)
 			}
 
+			if request.Facts["system.certificate_version"] != "3.2" {
+				t.Errorf("system certificate version = %q, want %q", request.Facts["system.certificate_version"], "3.2")
+			}
+
 			w.Header().Set("Content-Type", "application/json")
 			_, _ = w.Write([]byte(`{"uuid":"consumer-1","idCert":{"cert":"CERT","key":"KEY"}}`))
 
@@ -66,7 +71,11 @@ func TestBasicClientListsOwnersAndCreatesConsumer(t *testing.T) {
 		t.Fatalf("owners = %+v", owners)
 	}
 	//nolint:lll
-	consumer, err := client.CreateConsumer(context.Background(), CreateConsumerRequest{Name: "test", Type: ConsumerType{Label: "system"}}, CreateConsumerOptions{Owner: "org-1"}) //nolint:lll
+	consumer, err := client.CreateConsumer(context.Background(), CreateConsumerRequest{
+		Name:  "test",
+		Type:  ConsumerType{Label: "system"},
+		Facts: NewFactsDTO(facts.Facts{SystemCertificateVersion: new("3.2")}),
+	}, CreateConsumerOptions{Owner: "org-1"})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -4,6 +4,7 @@ package certstore
 import (
 	"crypto/tls"
 	"fmt"
+	"log/slog"
 	"os"
 
 	internalcertstore "github.com/m-horky/elk/internal/certstore"
@@ -179,6 +180,9 @@ func newStore(environment, fallback string) (*internalcertstore.Store, error) {
 	directory := os.Getenv(environment)
 	if directory == "" {
 		directory = fallback
+		slog.Debug("using default certificate store directory", "directory", directory)
+	} else {
+		slog.Debug("using configured certificate store directory", "directory", directory)
 	}
 
 	store, err := internalcertstore.New(directory)

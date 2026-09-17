@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/BurntSushi/toml"
@@ -13,30 +14,43 @@ import (
 const defaultLegacyPath = "/etc/rhsm/rhsm.conf"
 
 func main() {
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})))
+
+	if err := run(); err != nil {
+		if !errors.Is(err, errUsage) {
+			slog.Error("command failed", "err", err)
+		}
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}
+
+func run() error {
 	path := defaultLegacyPath
 
 	if len(os.Args) > 2 {
-		fatal(errors.New("usage: test-elk-config-rhsm [rhsm.conf]"))
+		return fmt.Errorf("%w: usage: test-elk-config-rhsm [rhsm.conf]", errUsage)
 	}
 
 	if len(os.Args) == 2 {
 		path = os.Args[1]
 	}
 
+	slog.Info("loading legacy configuration", "path", path)
 	partial, err := internalconfig.LoadRHSM(elkfs.Filesystem{}, path)
 	if err != nil {
-		fatal(err)
+		return err
 	}
 
 	encoder := toml.NewEncoder(os.Stdout)
 	encoder.Indent = ""
 
 	if err := encoder.Encode(partial); err != nil {
-		fatal(fmt.Errorf("write legacy configuration: %w", err))
+		return fmt.Errorf("write legacy configuration: %w", err)
 	}
+
+	slog.Info("legacy configuration output written")
+	return nil
 }
 
-func fatal(err error) {
-	fmt.Fprintln(os.Stderr, err)
-	os.Exit(1)
-}
+var errUsage = errors.New("invalid command usage")

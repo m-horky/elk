@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"log/slog"
 	"os"
 	"path/filepath"
 )
@@ -36,6 +37,7 @@ func New(directory string) (*Store, error) {
 		return nil, errEmptyDirectory
 	}
 
+	slog.Debug("opening certificate store", "directory", directory)
 	if err := os.MkdirAll(directory, directoryMode); err != nil {
 		return nil, fmt.Errorf("create certificate store directory: %w", err)
 	}
@@ -49,6 +51,7 @@ func New(directory string) (*Store, error) {
 
 // Save stores a PEM certificate and its PEM private key.
 func (s *Store) Save(certificate, privateKey []byte) error {
+	slog.Debug("saving certificate pair", "directory", s.directory)
 	if _, err := tls.X509KeyPair(certificate, privateKey); err != nil {
 		return fmt.Errorf("validate certificate and private key: %w", err)
 	}
@@ -66,6 +69,7 @@ func (s *Store) Save(certificate, privateKey []byte) error {
 
 // Load returns the stored PEM certificate and private key.
 func (s *Store) Load() ([]byte, []byte, error) {
+	slog.Debug("loading certificate pair", "directory", s.directory)
 	certificate, err := readFile(filepath.Join(s.directory, certificateFile))
 	if err != nil {
 		return nil, nil, fmt.Errorf("load certificate: %w", err)
@@ -85,6 +89,7 @@ func (s *Store) Load() ([]byte, []byte, error) {
 
 // SaveCertificate stores a PEM encoded X.509 certificate without a private key.
 func (s *Store) SaveCertificate(certificate []byte) error {
+	slog.Debug("saving certificate", "directory", s.directory)
 	block, _ := pem.Decode(certificate)
 	if block == nil || block.Type != "CERTIFICATE" {
 		return errNoCertificate
@@ -103,6 +108,7 @@ func (s *Store) SaveCertificate(certificate []byte) error {
 
 // LoadCertificate returns the stored PEM encoded X.509 certificate.
 func (s *Store) LoadCertificate() ([]byte, error) {
+	slog.Debug("loading certificate", "directory", s.directory)
 	certificate, err := readFile(filepath.Join(s.directory, certificateFile))
 	if err != nil {
 		return nil, fmt.Errorf("load certificate: %w", err)
@@ -122,6 +128,7 @@ func (s *Store) LoadCertificate() ([]byte, error) {
 
 // Delete removes all certificate material in the store.
 func (s *Store) Delete() error {
+	slog.Debug("deleting certificate material", "directory", s.directory)
 	for _, name := range []string{certificateFile, privateKeyFile} {
 		if err := os.Remove(filepath.Join(s.directory, name)); err != nil && !os.IsNotExist(err) {
 			return fmt.Errorf("delete %s: %w", name, err)

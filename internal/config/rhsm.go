@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	iofs "io/fs"
+	"log/slog"
 	"net"
 	"net/url"
 	"strconv"
@@ -54,6 +55,7 @@ func LoadRHSM(filesystem elkfs.FS, path string) (Partial, error) {
 		return Partial{}, fmt.Errorf("cannot read legacy configuration %s: %w", path, err)
 	}
 
+	slog.Debug("legacy configuration file read", "path", path, "bytes", len(data))
 	file, err := ini.Load(data)
 	if err != nil {
 		return Partial{}, fmt.Errorf("cannot parse legacy configuration %s: %w", path, errors.New("invalid INI syntax"))
@@ -64,6 +66,7 @@ func LoadRHSM(filesystem elkfs.FS, path string) (Partial, error) {
 		return Partial{}, fmt.Errorf("cannot map legacy configuration %s: %w", path, err)
 	}
 
+	slog.Debug("legacy configuration parsed", "path", path)
 	return mapRHSMToPartial(legacy)
 }
 
@@ -165,6 +168,7 @@ func mapRHSMCandlepin(
 		result.TLSVerify = new(!insecure)
 	}
 
+	slog.Debug("mapped legacy subscription configuration", "host", host, "port", port)
 	return *result, true, nil
 }
 

@@ -3,6 +3,7 @@ package candlepin
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 )
@@ -42,6 +43,7 @@ func (c *Client) CreateConsumer(
 
 	query.Set("identity_cert_creation", "true")
 
+	slog.Debug("creating Candlepin consumer", "owner", options.Owner, "facts", len(request.Facts))
 	var consumer Consumer
 
 	_, err := c.http.DoJSON(ctx, http.MethodPost, "/consumers", query, request, &consumer)
@@ -49,5 +51,6 @@ func (c *Client) CreateConsumer(
 		return Consumer{}, fmt.Errorf("create consumer: %w", err)
 	}
 
+	slog.Debug("Candlepin consumer received", "uuid_present", consumer.UUID != "", "identity_certificate_present", consumer.IDCert != nil)
 	return consumer, nil
 }

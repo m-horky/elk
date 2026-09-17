@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 	"path/filepath"
 
@@ -24,6 +25,9 @@ func Get() (Config, error) {
 	dir := os.Getenv(configDirEnv)
 	if dir == "" {
 		dir = defaultConfigDir
+		slog.Debug("using default configuration directory", "directory", dir)
+	} else {
+		slog.Debug("using configured configuration directory", "directory", dir)
 	}
 
 	source := internalconfig.Source{

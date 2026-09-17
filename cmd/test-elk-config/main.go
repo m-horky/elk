@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"log/slog"
 	"os"
 
 	"github.com/BurntSushi/toml"
@@ -9,20 +10,28 @@ import (
 )
 
 func main() {
-	cfg, err := config.Get()
-	if err != nil {
-		fatal(err)
-	}
+	slog.SetDefault(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelDebug})))
 
-	enc := toml.NewEncoder(os.Stdout)
-
-	enc.Indent = ""
-	if err := enc.Encode(cfg); err != nil {
-		fatal(fmt.Errorf("write configuration: %w", err))
+	if err := run(); err != nil {
+		slog.Error("command failed", "err", err)
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
 	}
 }
 
-func fatal(err error) {
-	fmt.Fprintln(os.Stderr, err)
-	os.Exit(1)
+func run() error {
+	slog.Info("loading configuration")
+	cfg, err := config.Get()
+	if err != nil {
+		return err
+	}
+
+	enc := toml.NewEncoder(os.Stdout)
+	enc.Indent = ""
+	if err := enc.Encode(cfg); err != nil {
+		return fmt.Errorf("write configuration: %w", err)
+	}
+
+	slog.Info("configuration output written")
+	return nil
 }

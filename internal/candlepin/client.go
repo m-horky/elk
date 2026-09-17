@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
+	"log/slog"
 
 	"github.com/m-horky/elk/internal/httpclient"
 )
@@ -21,6 +22,7 @@ type Client struct{ http *httpclient.Client }
 // certificate is supplied by the application or credential package; this
 // package does not select or persist certificate files.
 func NewClient(cfg Config, certificate Certificate) (*Client, error) {
+	slog.Debug("constructing authenticated Candlepin client")
 	if len(certificate.Certificate) == 0 || certificate.PrivateKey == nil {
 		return nil, fmt.Errorf("candlepin client certificate is incomplete") //nolint:err113
 	}
@@ -37,6 +39,7 @@ func NewClient(cfg Config, certificate Certificate) (*Client, error) {
 
 // NewProbeClient constructs an unauthenticated client for exploratory connectivity checks.
 func NewProbeClient(cfg Config) (*Client, error) {
+	slog.Debug("constructing unauthenticated Candlepin client")
 	client, err := httpclient.New(cfg.HTTP)
 	if err != nil {
 		return nil, fmt.Errorf("construct Candlepin probe client: %w", err)

@@ -3,6 +3,7 @@ package candlepin
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 )
@@ -15,10 +16,12 @@ func (c *Client) ListUserOwners(ctx context.Context, username string) ([]Owner, 
 
 	var owners []Owner
 
+	slog.Debug("listing Candlepin organizations")
 	_, err := c.http.DoJSON(ctx, http.MethodGet, "/users/"+url.PathEscape(username)+"/owners", nil, nil, &owners)
 	if err != nil {
 		return nil, fmt.Errorf("list owners for user: %w", err)
 	}
 
+	slog.Debug("Candlepin organizations received", "count", len(owners))
 	return owners, nil
 }
