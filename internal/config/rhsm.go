@@ -40,7 +40,6 @@ type rhsmProxy struct {
 	Port     string `ini:"proxy_port"`
 	User     string `ini:"proxy_user"`
 	Password string `ini:"proxy_password"`
-	NoProxy  string `ini:"no_proxy"`
 }
 
 // LoadRHSM reads rhsm.conf into its DTO and translates the supported settings
@@ -56,6 +55,7 @@ func LoadRHSM(filesystem elkfs.FS, path string) (Partial, error) {
 	}
 
 	slog.Debug("legacy configuration file read", "path", path, "bytes", len(data))
+
 	file, err := ini.Load(data)
 	if err != nil {
 		return Partial{}, fmt.Errorf("cannot parse legacy configuration %s: %w", path, errors.New("invalid INI syntax"))
@@ -67,6 +67,7 @@ func LoadRHSM(filesystem elkfs.FS, path string) (Partial, error) {
 	}
 
 	slog.Debug("legacy configuration parsed", "path", path)
+
 	return mapRHSMToPartial(legacy)
 }
 
@@ -169,6 +170,7 @@ func mapRHSMCandlepin(
 	}
 
 	slog.Debug("mapped legacy subscription configuration", "host", host, "port", port)
+
 	return *result, true, nil
 }
 
@@ -335,11 +337,7 @@ func mapRHSMProxy(proxy rhsmProxy) (PartialHTTPProxy, bool, error) {
 		result.Password = new(proxy.Password)
 	}
 
-	if value := strings.TrimSpace(proxy.NoProxy); value != "" {
-		result.NoProxy = new(value)
-	}
-
-	if result.URI == nil && result.User == nil && result.Password == nil && result.NoProxy == nil {
+	if result.URI == nil && result.User == nil && result.Password == nil {
 		return PartialHTTPProxy{}, false, nil
 	}
 

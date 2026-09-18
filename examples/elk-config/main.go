@@ -21,17 +21,20 @@ func main() {
 
 func run() error {
 	slog.Info("loading configuration")
+
 	cfg, err := config.Get()
 	if err != nil {
 		return fmt.Errorf("load configuration: %w", err)
 	}
 
 	enc := toml.NewEncoder(os.Stdout)
+
 	enc.Indent = ""
 	if err := enc.Encode(cfg); err != nil {
 		return fmt.Errorf("write configuration: %w", err)
 	}
 
 	slog.Info("configuration output written")
+
 	return nil
 }

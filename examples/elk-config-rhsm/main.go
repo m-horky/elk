@@ -20,6 +20,7 @@ func main() {
 		if !errors.Is(err, errUsage) {
 			slog.Error("command failed", "err", err)
 		}
+
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -37,6 +38,7 @@ func run() error {
 	}
 
 	slog.Info("loading legacy configuration", "path", path)
+
 	partial, err := internalconfig.LoadRHSM(elkfs.Filesystem{}, path)
 	if err != nil {
 		return fmt.Errorf("load legacy configuration: %w", err)
@@ -50,6 +52,7 @@ func run() error {
 	}
 
 	slog.Info("legacy configuration output written")
+
 	return nil
 }
 

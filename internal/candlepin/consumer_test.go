@@ -56,7 +56,7 @@ func TestBasicClientListsOwnersAndCreatesConsumer(t *testing.T) { //nolint:funle
 	defer server.Close()
 
 	//nolint:lll
-	client, err := NewBasicClient(Config{HTTP: httpclient.Config{BaseURL: server.URL, TLSVerify: true}}, BasicCredentials{Username: "user", Password: "password"}) //nolint:lll
+	client, err := NewBasicClient(Config{HTTP: httpclient.Config{BaseURL: server.URL}}, BasicCredentials{Username: "user", Password: "password"}) //nolint:lll
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -91,7 +91,7 @@ func TestBasicClientListsOwnersAndCreatesConsumer(t *testing.T) { //nolint:funle
 // When owners are requested for an empty username
 // Then the client returns a validation error without making a request.
 func TestListUserOwnersRejectsEmptyUsername(t *testing.T) {
-	client, err := NewProbeClient(Config{HTTP: httpclient.Config{BaseURL: "https://example.test", TLSVerify: true}})
+	client, err := NewProbeClient(Config{HTTP: httpclient.Config{BaseURL: "https://example.test"}})
 	if err != nil {
 		t.Fatal(err)
 	}

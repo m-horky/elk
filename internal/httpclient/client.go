@@ -113,6 +113,7 @@ func newTransport(cfg Config, roots *x509.CertPool) (*http.Transport, error) {
 	tr.IdleConnTimeout = cfg.IdleTimeout
 	tr.Proxy = http.ProxyFromEnvironment
 
+	// TODO: Honor the configuration file's no-proxy setting when proxy bypass support is added.
 	if cfg.Proxy.URI != "" {
 		u, err := url.Parse(cfg.Proxy.URI)
 		if err != nil {

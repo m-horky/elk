@@ -12,6 +12,7 @@ check:
 .PHONY: fmt
 fmt:
 	golangci-lint fmt
+	golangci-lint run --fix
 
 .PHONY: build
 build:

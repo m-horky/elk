@@ -22,6 +22,7 @@ type Facts struct {
 // implementation.
 func Collect() (*Facts, error) {
 	slog.Debug("collecting system facts")
+
 	return &Facts{
 		SystemCertificateVersion: new(certificateVersion),
 	}, nil

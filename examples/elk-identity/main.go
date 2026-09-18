@@ -202,7 +202,7 @@ func candlepinConfig(cfg config.Config, endpoint config.Endpoint) candlepin.Conf
 		RequestTimeout: cfg.HTTP.Timeout.Request, IdleTimeout: cfg.HTTP.Timeout.Idle,
 		Proxy: httpclient.ProxyConfig{
 			URI: cfg.HTTP.Proxy.URI, Username: cfg.HTTP.Proxy.User,
-			Password: cfg.HTTP.Proxy.Password, NoProxy: cfg.HTTP.Proxy.NoProxy,
+			Password: cfg.HTTP.Proxy.Password,
 		}, AllowRedirects: true,
 	}}
 }

@@ -15,7 +15,7 @@ type BasicCredentials struct {
 // NewBasicClient constructs a Candlepin client authenticated with HTTP Basic authentication.
 func NewBasicClient(cfg Config, credentials BasicCredentials) (*Client, error) {
 	if credentials.Username == "" {
-		return nil, fmt.Errorf("candlepin username must not be empty") //nolint:err113
+		return nil, fmt.Errorf("candlepin username must not be empty")
 	}
 
 	cfg.HTTP.BasicAuth = &httpclient.BasicAuth{

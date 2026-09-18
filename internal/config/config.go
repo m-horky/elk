@@ -58,12 +58,14 @@ func loadConfig(source Source) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+
 	slog.Debug("configuration override paths discovered", "count", len(paths), "paths", paths)
 
 	// Read and decode each override configuration file.
 	partials := make([]Partial, 0, len(paths))
 	for _, path := range paths {
 		slog.Debug("decoding configuration override", "path", path)
+
 		data, err := source.Filesystem.Read(path)
 		if err != nil {
 			return Config{}, fmt.Errorf("read %s: %w", path, err)
@@ -82,6 +84,7 @@ func loadConfig(source Source) (Config, error) {
 	if err != nil {
 		return Config{}, err
 	}
+
 	slog.Debug("embedded default configuration loaded")
 
 	// Resolve the `interpret-legacy-configurations` option.
@@ -92,8 +95,10 @@ func loadConfig(source Source) (Config, error) {
 
 	// Load the legacy source only when the Elk configuration enables it.
 	legacy := Partial{}
+
 	if effective.Compatibility.InterpretLegacy && source.LegacyPath != "" {
 		slog.Debug("loading legacy configuration", "path", source.LegacyPath)
+
 		legacy, err = LoadRHSM(source.Filesystem, source.LegacyPath)
 		if err != nil {
 			return Config{}, err
@@ -106,6 +111,7 @@ func loadConfig(source Source) (Config, error) {
 	if len(partials) > 0 {
 		slog.Debug("applying configuration overrides", "count", len(partials))
 	}
+
 	for _, partial := range partials {
 		cfg = cfg.Update(partial)
 	}

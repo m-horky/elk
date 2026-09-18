@@ -90,14 +90,14 @@ func TestConfigUpdateAppliesExplicitZeroValues(t *testing.T) {
 		Compatibility: Compatibility{InterpretLegacy: true},
 		HTTP: HTTP{
 			Timeout: Timeout{Connect: 30 * time.Second},
-			Proxy:   Proxy{URI: "https://proxy.example"},
+			Proxy:   Proxy{URI: "https://proxy.example", NoProxy: "localhost"},
 		},
 	}
 	override := Partial{
 		Compatibility: &PartialCompatibility{InterpretLegacyConfigurations: new(bool)},
 		HTTP: &PartialHTTP{
 			Timeout: &PartialHTTPTimeout{Connect: new(int)},
-			Proxy:   &PartialHTTPProxy{URI: new(string)},
+			Proxy:   &PartialHTTPProxy{URI: new(string), NoProxy: new(string)},
 		},
 	}
 
@@ -112,6 +112,10 @@ func TestConfigUpdateAppliesExplicitZeroValues(t *testing.T) {
 
 	if got.HTTP.Proxy.URI != "" {
 		t.Errorf("Proxy.URI = %q, want empty string", got.HTTP.Proxy.URI)
+	}
+
+	if got.HTTP.Proxy.NoProxy != "" {
+		t.Errorf("Proxy.NoProxy = %q, want empty string", got.HTTP.Proxy.NoProxy)
 	}
 }
 
@@ -173,7 +177,7 @@ func (f configTestFS) Read(path string) ([]byte, error) {
 
 func (f configTestFS) ReadDir(path string) ([]os.DirEntry, error) {
 	if path != dropInPath {
-		return nil, errors.New("unexpected ReadDir path") //nolint:err113
+		return nil, errors.New("unexpected ReadDir path")
 	}
 
 	return f.entries, nil
@@ -193,7 +197,7 @@ func (f configTestFS) Stat(path string) (elkfs.FileInfo, error) {
 }
 
 func (f configTestFS) Open(string) (elkfs.File, error) { //nolint:ireturn // required by elkfs.FS
-	return nil, errors.New("unexpected Open call") //nolint:err113
+	return nil, errors.New("unexpected Open call")
 }
 
 type configTestDirEntry struct {
@@ -277,7 +281,7 @@ func TestDiscoverOverridePathsAllowsMissingFiles(t *testing.T) {
 func TestDiscoverOverridePathsPropagatesStatError(t *testing.T) {
 	t.Parallel()
 
-	statErr := errors.New("permission denied") //nolint:err113
+	statErr := errors.New("permission denied")
 
 	filesystem := new(configTestFS)
 	filesystem.statErr = map[string]error{mainConfigPath: statErr}

@@ -311,18 +311,18 @@ func TestTranslateLegacyRepositoryValidation(t *testing.T) {
 // TestTranslateLegacyProxy verifies proxy endpoint and optional credential translation.
 //
 // Given a complete legacy proxy section,
-// when it is translated, then hostname, port, credentials, and no_proxy populate the HTTP proxy.
+// when it is translated, then hostname, port, and credentials populate the HTTP proxy.
 func TestTranslateLegacyProxy(t *testing.T) {
 	t.Parallel()
 
 	//nolint:lll,wsl_v5
-	got, present, err := mapRHSMProxy(rhsmProxy{Hostname: "proxy.example.com", Port: "3128", User: " user ", Password: "secret", NoProxy: " localhost,example.com "}) //nolint:wsl_v5
+	got, present, err := mapRHSMProxy(rhsmProxy{Hostname: "proxy.example.com", Port: "3128", User: " user ", Password: "secret"}) //nolint:wsl_v5
 	//nolint:wsl_v5
 	if err != nil || !present {
 		t.Fatalf("mapRHSMProxy() = (%+v, %v, %v), want present without error", got, present, err)
 	}
 	//nolint:lll,wsl_v5
-	if got.URI == nil || *got.URI != "https://proxy.example.com:3128" || got.User == nil || *got.User != "user" || got.Password == nil || *got.Password != "secret" || got.NoProxy == nil || *got.NoProxy != "localhost,example.com" { //nolint:wsl_v5
+	if got.URI == nil || *got.URI != "https://proxy.example.com:3128" || got.User == nil || *got.User != "user" || got.Password == nil || *got.Password != "secret" { //nolint:wsl_v5
 		t.Errorf("proxy = %+v, want translated fields", got)
 	}
 }
@@ -396,7 +396,6 @@ proxy_hostname = proxy.example.com
 proxy_port = 3128
 proxy_user = user
 proxy_password = password
-no_proxy = localhost
 `)}}
 	//nolint:wsl_v5
 	got, err := LoadRHSM(filesystem, path)
