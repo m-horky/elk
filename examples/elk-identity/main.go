@@ -17,6 +17,7 @@ import (
 	"github.com/m-horky/elk/pkg/certstore"
 	"github.com/m-horky/elk/pkg/config"
 	"github.com/m-horky/elk/pkg/facts"
+	"github.com/m-horky/elk/pkg/version"
 )
 
 var errUsage = errors.New("invalid command usage")
@@ -30,7 +31,9 @@ func main() {
 		if !errors.Is(err, errUsage) {
 			slog.Error("command failed", "err", err)
 		}
+
 		_, _ = fmt.Fprintln(os.Stderr, err)
+
 		os.Exit(1)
 	}
 }
@@ -40,19 +43,27 @@ func run() error {
 		return fmt.Errorf("%w: a subcommand is required (register or unregister)", errUsage)
 	}
 
+	ctx := context.Background()
+
+	ctx, err := httpclient.WithTriggeredBy(ctx, "elk-identity", version.Version)
+	if err != nil {
+		return fmt.Errorf("create HTTP caller context: %w", err)
+	}
+
 	switch os.Args[1] {
 	case "register":
-		return runRegister(os.Args[2:])
+		return runRegister(ctx, os.Args[2:])
 	case "unregister":
-		return runUnregister(os.Args[2:])
+		return runUnregister(ctx, os.Args[2:])
 	default:
 		return fmt.Errorf("%w: unknown subcommand %q", errUsage, os.Args[1])
 	}
 }
 
-func runRegister(args []string) error { //nolint:funlen
+func runRegister(ctx context.Context, args []string) error { //nolint:funlen
 	flags := flag.NewFlagSet("register", flag.ContinueOnError)
 	username := flags.String("username", "", "Candlepin username")
+
 	password := flags.String("password", "", "Candlepin password")
 	if err := flags.Parse(args); err != nil {
 		return fmt.Errorf("%w: %w", errUsage, err)
@@ -68,6 +79,7 @@ func runRegister(args []string) error { //nolint:funlen
 	}
 
 	slog.Info("connecting to Candlepin")
+
 	client, err := candlepin.NewBasicClient(candlepinConfig(cfg, cfg.API.Subscriptions), candlepin.BasicCredentials{
 		Username: *username,
 		Password: *password,
@@ -75,18 +87,20 @@ func runRegister(args []string) error { //nolint:funlen
 	if err != nil {
 		return fmt.Errorf("construct Candlepin client: %w", err)
 	}
+
 	defer func() { _ = client.Close() }()
 
-	ctx := context.Background()
 	slog.Info("fetching Candlepin organizations")
+
 	owners, err := client.ListUserOwners(ctx, *username)
 	if err != nil {
 		return fmt.Errorf("list Candlepin organizations: %w", err)
 	}
 
 	if len(owners) == 0 {
-		return errors.New("candlepin returned no organizations for the user") //nolint:err113
+		return errors.New("candlepin returned no organizations for the user")
 	}
+
 	if len(owners) != 1 {
 		return fmt.Errorf("candlepin returned %d organizations; selecting one automatically is unsafe", len(owners))
 	}
@@ -94,14 +108,17 @@ func runRegister(args []string) error { //nolint:funlen
 	name, err := os.Hostname()
 	if err != nil || strings.TrimSpace(name) == "" {
 		slog.Warn("hostname unavailable, using fallback consumer name", "name", "elk-test-identity", "err", err)
+
 		name = "elk-test-identity"
 	}
+
 	systemFacts, err := facts.Collect()
 	if err != nil {
 		return fmt.Errorf("failed to collect system facts: %w", err)
 	}
 
 	slog.Info("creating Candlepin consumer", "organization", owners[0].Key)
+
 	consumer, err := client.CreateConsumer(ctx, candlepin.CreateConsumerRequest{
 		Name: name, Type: candlepin.ConsumerType{Label: "system"}, Facts: candlepin.NewFactsDTO(systemFacts),
 	}, candlepin.CreateConsumerOptions{Owner: owners[0].Key})
@@ -110,13 +127,14 @@ func runRegister(args []string) error { //nolint:funlen
 	}
 
 	if consumer.UUID == "" || consumer.IDCert == nil || consumer.IDCert.Cert == "" || consumer.IDCert.Key == "" {
-		return errors.New("candlepin created the consumer without complete identity certificate material") //nolint:err113
+		return errors.New("candlepin created the consumer without complete identity certificate material")
 	}
 
 	identityStore, err := certstore.NewIdentityStore()
 	if err != nil {
 		return fmt.Errorf("open identity certificate store: %w", err)
 	}
+
 	if err := identityStore.Save(certstore.KeyPair{
 		CertificatePEM: []byte(consumer.IDCert.Cert),
 		PrivateKeyPEM:  []byte(consumer.IDCert.Key),
@@ -130,13 +148,14 @@ func runRegister(args []string) error { //nolint:funlen
 	return nil
 }
 
-func runUnregister(args []string) error {
+func runUnregister(ctx context.Context, args []string) error {
 	flags := flag.NewFlagSet("unregister", flag.ContinueOnError)
 	// TODO: obtain the UUID from the stored certificate once certificate-reading infrastructure exists.
 	uuid := flags.String("uuid", "", "Candlepin consumer UUID")
 	if err := flags.Parse(args); err != nil {
 		return fmt.Errorf("%w: %w", errUsage, err)
 	}
+
 	if *uuid == "" {
 		return fmt.Errorf("%w: --uuid is required", errUsage)
 	}
@@ -150,6 +169,7 @@ func runUnregister(args []string) error {
 	if err != nil {
 		return fmt.Errorf("open identity certificate store: %w", err)
 	}
+
 	certificate, err := identityStore.LoadTLS()
 	if err != nil {
 		return fmt.Errorf("load consumer identity certificate: %w", err)
@@ -162,9 +182,10 @@ func runUnregister(args []string) error {
 
 	defer func() { _ = client.Close() }()
 
-	if err := client.DeleteConsumer(context.Background(), *uuid); err != nil {
+	if err := client.DeleteConsumer(ctx, *uuid); err != nil {
 		return fmt.Errorf("delete Candlepin consumer: %w", err)
 	}
+
 	if err := identityStore.Delete(); err != nil {
 		return fmt.Errorf("delete local consumer identity: %w", err)
 	}
@@ -176,7 +197,7 @@ func runUnregister(args []string) error {
 
 func candlepinConfig(cfg config.Config, endpoint config.Endpoint) candlepin.Config {
 	return candlepin.Config{HTTP: httpclient.Config{
-		BaseURL: endpoint.URI, CAFile: endpoint.CAPath, TLSVerify: endpoint.TLSVerify,
+		BaseURL: endpoint.URI, CAFile: endpoint.CAPath,
 		InsecureTLS: !endpoint.TLSVerify, ConnectTimeout: cfg.HTTP.Timeout.Connect,
 		RequestTimeout: cfg.HTTP.Timeout.Request, IdleTimeout: cfg.HTTP.Timeout.Idle,
 		Proxy: httpclient.ProxyConfig{

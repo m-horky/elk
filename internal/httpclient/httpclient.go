@@ -1,5 +1,3 @@
-// Package httpclient contains the exploratory shared HTTP transport used by
-// the draft endpoint probe. It is not the final service API.
 package httpclient
 
 import (
@@ -58,6 +56,7 @@ type HTTPError struct {
 	BodyTruncated       bool
 }
 
+// Error returns the HTTP error as a formatted method, URL, status, and body message.
 func (e *HTTPError) Error() string {
 	body := strings.TrimSpace(string(e.Body))
 	if e.BodyTruncated {
@@ -153,20 +152,23 @@ func newTransport(cfg Config, roots *x509.CertPool) *http.Transport {
 
 func newHTTPClient(cfg Config, base *url.URL, tr *http.Transport) *http.Client {
 	cl := new(http.Client)
-	cl.Transport = tr
+	cl.Transport = withUserAgent(tr)
 	cl.Timeout = cfg.RequestTimeout
 	cl.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		if !cfg.AllowRedirects {
 			slog.Debug("HTTP redirect not followed", "url", sanitizedURL(req.URL), "reason", "redirects disabled")
+
 			return http.ErrUseLastResponse
 		}
 
 		if req.URL.Scheme != base.Scheme || !strings.EqualFold(req.URL.Host, base.Host) {
 			slog.Debug("HTTP redirect rejected", "url", sanitizedURL(req.URL), "reason", "origin not approved")
+
 			return fmt.Errorf("redirect to unapproved origin %q", sanitizedURL(req.URL)) //nolint:err113
 		}
 
 		slog.Debug("HTTP redirect followed", "url", sanitizedURL(req.URL))
+
 		return nil
 	}
 
@@ -176,6 +178,7 @@ func newHTTPClient(cfg Config, base *url.URL, tr *http.Transport) *http.Client {
 // netDialer and proxyFunc are kept here to avoid exposing transport details.
 type netDialer struct{ timeout time.Duration }
 
+// DialContext opens a network connection using the configured connection timeout.
 func (d *netDialer) DialContext(ctx context.Context, network, address string) (net.Conn, error) {
 	dialer := new(net.Dialer)
 	dialer.Timeout = d.timeout
@@ -209,7 +212,10 @@ func proxyFunc(cfg ProxyConfig) func(*http.Request) (*url.URL, error) {
 	}
 }
 
+// URL resolves a path against the client's configured base URL.
 func (c *Client) URL(p string) (string, error) { return JoinURL(c.base, p) }
+
+// JoinURL resolves a path against a base URL while preserving the base path.
 func JoinURL(base *url.URL, p string) (string, error) {
 	if base == nil {
 		return "", errors.New("nil base URL") //nolint:err113
@@ -223,6 +229,7 @@ func JoinURL(base *url.URL, p string) (string, error) {
 	return u.String(), nil
 }
 
+// Get performs a GET request for the specified path.
 func (c *Client) Get(ctx context.Context, p string) (int, error) {
 	return c.do(ctx, http.MethodGet, p, nil, nil, nil)
 }
@@ -244,6 +251,8 @@ func (c *Client) DoJSON(ctx context.Context, method, p string, query url.Values,
 	return c.do(ctx, method, p, query, body, responseBody)
 }
 
+// do performs an HTTP request and handles its response.
+//
 //nolint:lll
 func (c *Client) do(ctx context.Context, method, p string, query url.Values, body io.Reader, responseBody any) (int, error) { //nolint:funcorder,funlen
 	u, err := c.URL(p)
@@ -272,7 +281,9 @@ func (c *Client) do(ctx context.Context, method, p string, query url.Values, bod
 	}
 
 	slog.Debug("HTTP request started", "method", req.Method, "url", sanitizedURL(req.URL), "body", body != nil)
+
 	started := time.Now()
+
 	resp, err := c.client.Do(req)
 	if err != nil {
 		if resp != nil && resp.Body != nil {
@@ -280,6 +291,7 @@ func (c *Client) do(ctx context.Context, method, p string, query url.Values, bod
 		}
 
 		slog.Debug("HTTP request failed", "method", req.Method, "url", sanitizedURL(req.URL), "duration", time.Since(started), "err", err)
+
 		return 0, err //nolint:wrapcheck
 	}
 
@@ -308,10 +320,12 @@ func (c *Client) do(ctx context.Context, method, p string, query url.Values, bod
 
 	if err := json.NewDecoder(resp.Body).Decode(responseBody); err != nil {
 		slog.Debug("HTTP response JSON decode failed", "method", req.Method, "url", sanitizedURL(req.URL), "status", resp.StatusCode, "duration", time.Since(started), "err", err)
+
 		return resp.StatusCode, fmt.Errorf("decode JSON response: %w", err)
 	}
 
 	slog.Debug("HTTP response received", "method", req.Method, "url", sanitizedURL(req.URL), "status", resp.StatusCode, "duration", time.Since(started))
+
 	return resp.StatusCode, nil
 }
 
@@ -337,4 +351,5 @@ func sanitizedURL(u *url.URL) string {
 	return v.String()
 }
 
+// Close releases idle connections held by the client.
 func (c *Client) Close() error { c.transport.CloseIdleConnections(); return nil } //nolint:nlreturn
