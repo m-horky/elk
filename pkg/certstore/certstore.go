@@ -1,23 +1,18 @@
 // Package certstore provides access to the certificate material used by Elk.
+//
+// The stores live in the RHSM certificate locations: NewIdentityStore opens
+// /etc/pki/consumer, NewEntitlementStore opens /etc/pki/entitlement, and
+// NewProductStore opens /etc/pki/product. Directory overrides are provided by
+// the pkg/constants package.
 package certstore
 
 import (
 	"crypto/tls"
 	"fmt"
 	"log/slog"
-	"os"
 
 	internalcertstore "github.com/m-horky/elk/internal/certstore"
-)
-
-const (
-	DefaultIdentityDir    = "/var/lib/elk/identity"
-	DefaultEntitlementDir = "/var/lib/elk/entitlement"
-	DefaultProductDir     = "/var/lib/elk/product"
-
-	IdentityDirEnv    = "ELK_X509_IDENTITY_DIR"
-	EntitlementDirEnv = "ELK_X509_ENTITLEMENT_DIR"
-	ProductDirEnv     = "ELK_X509_PRODUCT_DIR"
+	"github.com/m-horky/elk/pkg/constants"
 )
 
 // KeyPair contains a PEM encoded certificate and its PEM encoded private key.
@@ -40,10 +35,9 @@ type EntitlementStore struct{ store *internalcertstore.Store }
 // ProductStore stores a product certificate without a private key.
 type ProductStore struct{ store *internalcertstore.Store }
 
-// NewIdentityStore opens the identity store, using ELK_X509_IDENTITY_DIR or the default
-// identity directory.
+// NewIdentityStore opens the identity store in /etc/pki/consumer, or its environment override.
 func NewIdentityStore() (*IdentityStore, error) {
-	store, err := newStore(IdentityDirEnv, DefaultIdentityDir)
+	store, err := newStore(constants.Path(constants.IdentityDir))
 	if err != nil {
 		return nil, fmt.Errorf("open identity certificate store: %w", err)
 	}
@@ -51,10 +45,9 @@ func NewIdentityStore() (*IdentityStore, error) {
 	return &IdentityStore{store: store}, nil
 }
 
-// NewEntitlementStore opens the entitlement store, using
-// ELK_X509_ENTITLEMENT_DIR or the default entitlement directory.
+// NewEntitlementStore opens the entitlement store in /etc/pki/entitlement, or its environment override.
 func NewEntitlementStore() (*EntitlementStore, error) {
-	store, err := newStore(EntitlementDirEnv, DefaultEntitlementDir)
+	store, err := newStore(constants.Path(constants.EntitlementDir))
 	if err != nil {
 		return nil, fmt.Errorf("open entitlement certificate store: %w", err)
 	}
@@ -62,10 +55,9 @@ func NewEntitlementStore() (*EntitlementStore, error) {
 	return &EntitlementStore{store: store}, nil
 }
 
-// NewProductStore opens the product store, using ELK_X509_PRODUCT_DIR or the
-// default product directory.
+// NewProductStore opens the product store in /etc/pki/product, or its environment override.
 func NewProductStore() (*ProductStore, error) {
-	store, err := newStore(ProductDirEnv, DefaultProductDir)
+	store, err := newStore(constants.Path(constants.ProductDir))
 	if err != nil {
 		return nil, fmt.Errorf("open product certificate store: %w", err)
 	}
@@ -176,14 +168,9 @@ func (s *ProductStore) Delete() error {
 	return nil
 }
 
-func newStore(environment, fallback string) (*internalcertstore.Store, error) {
-	directory := os.Getenv(environment)
-	if directory == "" {
-		directory = fallback
-		slog.Debug("using default certificate store directory", "directory", directory)
-	} else {
-		slog.Debug("using configured certificate store directory", "directory", directory)
-	}
+// newStore opens the certificate store rooted at the configured directory.
+func newStore(directory string) (*internalcertstore.Store, error) {
+	slog.Debug("using certificate store directory", "directory", directory)
 
 	store, err := internalcertstore.New(directory)
 	if err != nil {

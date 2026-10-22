@@ -3,44 +3,53 @@ package config
 import (
 	"fmt"
 	"log/slog"
-	"os"
-	"path/filepath"
 
 	internalconfig "github.com/m-horky/elk/internal/config"
+	"github.com/m-horky/elk/internal/config/rhsm"
 	elkfs "github.com/m-horky/elk/internal/fs"
-)
-
-const (
-	defaultConfigDir  = "/etc/elk"
-	defaultLegacyPath = "/etc/rhsm/rhsm.conf"
-	configDirEnv      = "ELK_CONFIG_DIR"
+	"github.com/m-horky/elk/pkg/constants"
 )
 
 // Config is the resolved application configuration.
 type Config = internalconfig.Config
 
+// HTTP contains the resolved outgoing HTTP settings.
+type HTTP = internalconfig.HTTP
+
+// Timeout contains the resolved HTTP transport timeouts.
+type Timeout = internalconfig.Timeout
+
+// Proxy describes the HTTP proxy, its credentials, and bypass rules.
+type Proxy = internalconfig.Proxy
+
+// API contains the resolved remote endpoints.
+type API = internalconfig.API
+
+// Content contains the resolved content-delivery endpoints.
+type Content = internalconfig.Content
+
+// Insights contains the resolved Insights endpoints.
+type Insights = internalconfig.Insights
+
 // Endpoint describes a configured service endpoint.
 type Endpoint = internalconfig.Endpoint
 
-// Get loads the embedded defaults and application overrides. ELK_CONFIG_DIR,
-// when set, replaces /etc/elk as the configuration directory.
+// Get loads the embedded defaults and application overrides from the system
+// configuration paths, or their environment overrides.
 func Get() (Config, error) {
-	dir := os.Getenv(configDirEnv)
-	if dir == "" {
-		dir = defaultConfigDir
-		slog.Debug("using default configuration directory", "directory", dir)
-	} else {
-		slog.Debug("using configured configuration directory", "directory", dir)
+	mainPath := constants.Path(constants.ConfigPath)
+	dropInsDir := constants.Path(constants.ConfigDropInsDir)
+	rhsmPath := constants.Path(constants.RHSMConfigPath)
+
+	slog.Debug("loading application configuration",
+		"path", mainPath, "drop-ins", dropInsDir, "rhsm", rhsmPath)
+
+	fallback, err := rhsm.Load(elkfs.Filesystem{}, rhsmPath)
+	if err != nil {
+		return Config{}, fmt.Errorf("load RHSM configuration: %w", err)
 	}
 
-	source := internalconfig.Source{
-		Filesystem: elkfs.Filesystem{},
-		MainPath:   filepath.Join(dir, "elk.conf"),
-		DropInsDir: filepath.Join(dir, "elk.conf.d"),
-		LegacyPath: defaultLegacyPath,
-	}
-
-	cfg, err := internalconfig.Get(source)
+	cfg, err := internalconfig.Load(elkfs.Filesystem{}, mainPath, dropInsDir, &fallback)
 	if err != nil {
 		return Config{}, fmt.Errorf("load application configuration: %w", err)
 	}

@@ -1,0 +1,53 @@
+package consumer
+
+import (
+	"crypto/x509"
+	"encoding/pem"
+	"fmt"
+	"strings"
+
+	"github.com/m-horky/elk/internal/fs"
+)
+
+const maxCertificateSize = 1024 * 1024 // 1 MiB
+
+// Identity contains the host UUID and organization ID.
+type Identity struct {
+	UUID  string
+	OrgID string
+}
+
+// Read reads a PEM-encoded consumer certificate
+// and extracts its identity.
+func Read(filesystem fs.FS, path string) (Identity, error) {
+	data, err := filesystem.Read(path, maxCertificateSize)
+	if err != nil {
+		return Identity{}, fmt.Errorf("read consumer certificate %s: %w", path, err)
+	}
+
+	block, _ := pem.Decode(data)
+	if block == nil || block.Type != "CERTIFICATE" {
+		return Identity{}, fmt.Errorf("parse consumer certificate %s: expected PEM CERTIFICATE block", path)
+	}
+
+	certificate, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return Identity{}, fmt.Errorf("parse consumer certificate %s: invalid X.509 certificate", path)
+	}
+
+	uuid := strings.TrimSpace(certificate.Subject.CommonName)
+	if uuid == "" {
+		return Identity{}, fmt.Errorf("consumer certificate %s subject has no common name", path)
+	}
+
+	if len(certificate.Subject.Organization) != 1 {
+		return Identity{}, fmt.Errorf("consumer certificate %s subject must have exactly one organization", path)
+	}
+
+	orgID := strings.TrimSpace(certificate.Subject.Organization[0])
+	if orgID == "" {
+		return Identity{}, fmt.Errorf("consumer certificate %s subject has an empty organization", path)
+	}
+
+	return Identity{UUID: uuid, OrgID: orgID}, nil
+}

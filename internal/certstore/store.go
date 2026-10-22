@@ -1,5 +1,3 @@
-// Package certstore provides the filesystem implementation used by the public
-// certificate stores.
 package certstore
 
 import (

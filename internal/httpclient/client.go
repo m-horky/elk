@@ -12,6 +12,8 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"golang.org/x/net/http/httpproxy"
 )
 
 type Config struct {
@@ -32,7 +34,7 @@ type BasicAuth struct {
 	Password string
 }
 
-type ProxyConfig struct{ URI, Username, Password string }
+type ProxyConfig struct{ URI, Username, Password, NoProxy string }
 
 type Client struct {
 	client    *http.Client
@@ -113,7 +115,6 @@ func newTransport(cfg Config, roots *x509.CertPool) (*http.Transport, error) {
 	tr.IdleConnTimeout = cfg.IdleTimeout
 	tr.Proxy = http.ProxyFromEnvironment
 
-	// TODO: Honor the configuration file's no-proxy setting when proxy bypass support is added.
 	if cfg.Proxy.URI != "" {
 		u, err := url.Parse(cfg.Proxy.URI)
 		if err != nil {
@@ -124,7 +125,15 @@ func newTransport(cfg Config, roots *x509.CertPool) (*http.Transport, error) {
 			u.User = url.UserPassword(cfg.Proxy.Username, cfg.Proxy.Password)
 		}
 
-		tr.Proxy = http.ProxyURL(u)
+		proxyFunc := (&httpproxy.Config{
+			HTTPProxy:  u.String(),
+			HTTPSProxy: u.String(),
+			NoProxy:    cfg.Proxy.NoProxy,
+		}).ProxyFunc()
+
+		tr.Proxy = func(request *http.Request) (*url.URL, error) {
+			return proxyFunc(request.URL)
+		}
 	}
 
 	return tr, nil

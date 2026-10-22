@@ -1,5 +1,3 @@
-// Package httpclient contains the exploratory shared HTTP transport used by
-// the draft endpoint probe. It is not the final service API.
 package httpclient
 
 import (

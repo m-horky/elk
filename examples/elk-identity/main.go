@@ -197,12 +197,13 @@ func runUnregister(ctx context.Context, args []string) error {
 
 func candlepinConfig(cfg config.Config, endpoint config.Endpoint) candlepin.Config {
 	return candlepin.Config{HTTP: httpclient.Config{
-		BaseURL: endpoint.URI, CAFile: endpoint.CAPath,
+		BaseURL: endpoint.URI.String(), CAFile: endpoint.CAPath,
 		InsecureTLS: !endpoint.TLSVerify, ConnectTimeout: cfg.HTTP.Timeout.Connect,
 		RequestTimeout: cfg.HTTP.Timeout.Request, IdleTimeout: cfg.HTTP.Timeout.Idle,
 		Proxy: httpclient.ProxyConfig{
-			URI: cfg.HTTP.Proxy.URI, Username: cfg.HTTP.Proxy.User,
-			Password: cfg.HTTP.Proxy.Password,
-		}, AllowRedirects: true,
+			URI:     cfg.HTTP.Proxy.URI.String(),
+			NoProxy: cfg.HTTP.Proxy.NoProxy,
+		},
+		AllowRedirects: true,
 	}}
 }

@@ -137,3 +137,36 @@ func TestNewUsesProxyCredentials(t *testing.T) {
 		t.Fatalf("proxy password = %q, want secret", password)
 	}
 }
+
+// TestNewHonorsNoProxy verifies the no-proxy bypass rules are applied.
+//
+// Given a proxy URI and a no-proxy rule matching the request host
+// When a client is constructed
+// Then the transport proxy function returns no proxy for that host.
+func TestNewHonorsNoProxy(t *testing.T) {
+	t.Parallel()
+
+	client, err := New(Config{
+		BaseURL: "https://example.test",
+		Proxy: ProxyConfig{
+			URI:      "http://proxy.example.test:3128",
+			Username: "user",
+			Password: "secret",
+			NoProxy:  "example.test",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	request, _ := http.NewRequest(http.MethodGet, "https://example.test", nil)
+
+	proxy, err := client.transport.Proxy(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if proxy != nil {
+		t.Fatalf("proxy = %v, want nil for a bypassed host", proxy)
+	}
+}

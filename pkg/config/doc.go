@@ -1,9 +1,10 @@
 // Package config loads the application's resolved configuration.
 //
 // Get loads the embedded defaults and applies configuration overrides from
-// ELK_CONFIG_DIR, or /etc/elk when that variable is not set. The configuration
-// file is elk.conf; additional .conf files in elk.conf.d are applied in
-// lexical order.
+// /etc/rhc/elk.conf and the .conf files in /etc/rhc/elk.conf.d in lexical
+// order. Settings from /etc/rhsm/rhsm.conf are translated and merged under the
+// native defaults when legacy configuration interpretation is enabled. Path
+// overrides are provided by the pkg/constants package.
 //
 // Load the resolved configuration with Get:
 //

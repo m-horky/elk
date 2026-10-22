@@ -7,7 +7,7 @@ import (
 	"os"
 
 	"github.com/BurntSushi/toml"
-	internalconfig "github.com/m-horky/elk/internal/config"
+	"github.com/m-horky/elk/internal/config/rhsm"
 	elkfs "github.com/m-horky/elk/internal/fs"
 )
 
@@ -39,7 +39,7 @@ func run() error {
 
 	slog.Info("loading legacy configuration", "path", path)
 
-	partial, err := internalconfig.LoadRHSM(elkfs.Filesystem{}, path)
+	cfg, err := rhsm.Load(elkfs.Filesystem{}, path)
 	if err != nil {
 		return fmt.Errorf("load legacy configuration: %w", err)
 	}
@@ -47,7 +47,7 @@ func run() error {
 	encoder := toml.NewEncoder(os.Stdout)
 	encoder.Indent = ""
 
-	if err := encoder.Encode(partial); err != nil {
+	if err := encoder.Encode(cfg); err != nil {
 		return fmt.Errorf("write legacy configuration: %w", err)
 	}
 

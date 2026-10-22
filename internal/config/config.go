@@ -1,279 +1,159 @@
 package config
 
 import (
-	"errors"
 	"fmt"
-	iofs "io/fs"
-	"log/slog"
-	"path/filepath"
-	"sort"
-	"sync"
+	"net/url"
+	"strings"
 	"time"
-
-	"github.com/BurntSushi/toml"
-	"github.com/m-horky/elk/data/etc"
-	elkfs "github.com/m-horky/elk/internal/fs"
 )
 
-var (
-	configOnce   sync.Once //nolint:gochecknoglobals
-	cachedConfig Config    //nolint:gochecknoglobals
-	errConfig    error
-)
-
-// Source describes where configuration overrides are loaded from.
-type Source struct {
-	Filesystem elkfs.FS
-	// MainPath is a path to a file where main configuration file exists.
-	MainPath string
-	// DropInsDir is a path to a directory where drop-in configuration files
-	// may be placed.
-	DropInsDir string
-	// LegacyPath is a path to rhsm.conf, which is used as an additional source
-	// of configuration options, unless disabled.
-	LegacyPath string
+// Config contains resolved native configuration.
+type Config struct {
+	HTTP HTTP
+	API  API
 }
 
-// Get returns a copy of the configuration assembled from the embedded
-// defaults and the supplied configuration source. Configuration is loaded at
-// most once and cached for the lifetime of the process. If loading fails, the
-// same error is returned on subsequent calls.
-func Get(source Source) (Config, error) {
-	configOnce.Do(func() {
-		cachedConfig, errConfig = loadConfig(source)
-	})
-
-	if errConfig != nil {
-		return Config{}, errConfig
-	}
-
-	return cachedConfig, nil
+// HTTP contains resolved outgoing HTTP settings.
+type HTTP struct {
+	Timeout Timeout
+	Proxy   Proxy
 }
 
-// loadConfig assembles configuration from embedded defaults and the supplied
-// legacy, main, and drop-in configuration sources.
-func loadConfig(source Source) (Config, error) {
-	// Find the main configuration file and drop-ins in their application order.
-	paths, err := discoverOverridePaths(source.Filesystem, source.MainPath, source.DropInsDir)
+// Timeout contains resolved transport timeouts.
+type Timeout struct {
+	Connect time.Duration
+	Request time.Duration
+	Idle    time.Duration
+}
+
+// Proxy contains a proxy URL (including credentials) and bypass rules.
+type Proxy struct {
+	URI     url.URL
+	NoProxy string
+}
+
+// API contains remote endpoints.
+type API struct {
+	Subscriptions Endpoint
+	Content       Content
+	Insights      Insights
+}
+
+// Content contains content-delivery endpoints.
+type Content struct {
+	RPM Endpoint
+}
+
+// Insights contains Insights endpoints.
+type Insights struct {
+	Ingress   Endpoint
+	Inventory Endpoint
+}
+
+// Endpoint contains an endpoint URL and TLS settings.
+type Endpoint struct {
+	URI       url.URL
+	TLSVerify bool
+	CAPath    string
+}
+
+// resolve converts merged native settings into complete resolved sections.
+func (partial *dtoConfig) resolve() (Config, error) {
+	subscriptions, err := resolveEndpoint("api.subscriptions", partial.API.Subscriptions)
 	if err != nil {
 		return Config{}, err
 	}
 
-	slog.Debug("configuration override paths discovered", "count", len(paths), "paths", paths)
-
-	// Read and decode each override configuration file.
-	partials := make([]Partial, 0, len(paths))
-	for _, path := range paths {
-		slog.Debug("decoding configuration override", "path", path)
-
-		data, err := source.Filesystem.Read(path)
-		if err != nil {
-			return Config{}, fmt.Errorf("read %s: %w", path, err)
-		}
-
-		var override Partial
-		if _, err := toml.Decode(string(data), &override); err != nil {
-			return Config{}, fmt.Errorf("decode %s: %w", path, err)
-		}
-
-		partials = append(partials, override)
-	}
-
-	// Start from the embedded configuration, which provides values for all fields.
-	defaults, err := loadDefaultConfig()
+	rpm, err := resolveEndpoint("api.content.rpm", partial.API.Content.RPM)
 	if err != nil {
 		return Config{}, err
 	}
 
-	slog.Debug("embedded default configuration loaded")
-
-	// Resolve the `interpret-legacy-configurations` option.
-	effective := defaults
-	for _, partial := range partials {
-		effective = effective.Update(partial)
-	}
-
-	// Load the legacy source only when the Elk configuration enables it.
-	legacy := Partial{}
-
-	if effective.Compatibility.InterpretLegacy && source.LegacyPath != "" {
-		slog.Debug("loading legacy configuration", "path", source.LegacyPath)
-
-		legacy, err = LoadRHSM(source.Filesystem, source.LegacyPath)
-		if err != nil {
-			return Config{}, err
-		}
-	}
-
-	cfg := defaults.Update(legacy)
-
-	// Apply Elk overrides on top the built-in and legacy options.
-	if len(partials) > 0 {
-		slog.Debug("applying configuration overrides", "count", len(partials))
-	}
-
-	for _, partial := range partials {
-		cfg = cfg.Update(partial)
-	}
-
-	return cfg, nil
-}
-
-// discoverOverridePaths returns a list of configuration files
-// (main one, then the drop-ins) in the order in which they should be applied.
-func discoverOverridePaths(filesystem elkfs.FS, mainPath, dropInPath string) ([]string, error) {
-	paths := []string{}
-
-	mainStat, err := filesystem.Stat(mainPath)
-	if err == nil {
-		if mainStat.IsRegular {
-			paths = append(paths, mainPath)
-		}
-	} else if !errors.Is(err, iofs.ErrNotExist) {
-		return nil, fmt.Errorf("stat %s: %w", mainPath, err)
-	}
-
-	dropInStat, err := filesystem.Stat(dropInPath)
-	if errors.Is(err, iofs.ErrNotExist) {
-		return paths, nil
-	}
-
+	ingress, err := resolveEndpoint("api.insights.ingress", partial.API.Insights.Ingress)
 	if err != nil {
-		return nil, fmt.Errorf("stat %s: %w", dropInPath, err)
+		return Config{}, err
 	}
 
-	if !dropInStat.IsDir {
-		return nil, fmt.Errorf("%s: %w", dropInPath, iofs.ErrInvalid)
-	}
-
-	entries, err := filesystem.ReadDir(dropInPath)
+	inventory, err := resolveEndpoint("api.insights.inventory", partial.API.Insights.Inventory)
 	if err != nil {
-		return nil, fmt.Errorf("read directory %s: %w", dropInPath, err)
+		return Config{}, err
 	}
 
-	var dropIns []string
-
-	for _, entry := range entries {
-		if entry.Name() == "" || entry.Name()[0] == '.' || filepath.Ext(entry.Name()) != ".conf" {
-			continue
-		}
-
-		path := filepath.Join(dropInPath, entry.Name())
-
-		stat, err := filesystem.Stat(path)
-		if err != nil {
-			return nil, fmt.Errorf("stat %s: %w", path, err)
-		}
-
-		if stat.IsRegular {
-			dropIns = append(dropIns, path)
-		}
+	proxy, err := resolveProxy(partial.HTTP.Proxy)
+	if err != nil {
+		return Config{}, err
 	}
 
-	sort.Strings(dropIns)
-
-	return append(paths, dropIns...), nil
+	return Config{
+		HTTP: HTTP{
+			Timeout: Timeout{
+				Connect: time.Duration(*partial.HTTP.Timeout.Connect) * time.Second,
+				Request: time.Duration(*partial.HTTP.Timeout.Request) * time.Second,
+				Idle:    time.Duration(*partial.HTTP.Timeout.Idle) * time.Second,
+			},
+			Proxy: proxy,
+		},
+		API: API{
+			Subscriptions: subscriptions,
+			Content:       Content{RPM: rpm},
+			Insights:      Insights{Ingress: ingress, Inventory: inventory},
+		},
+	}, nil
 }
 
-func seconds(value int) time.Duration {
-	if value <= 0 {
-		return 0
+// resolveEndpoint parses the configured endpoint and resolves its TLS settings.
+func resolveEndpoint(name string, partial dtoEndpoint) (Endpoint, error) {
+	if partial.URI == nil || *partial.URI == "" || partial.TLSVerify == nil || partial.CAPath == nil {
+		return Endpoint{}, fmt.Errorf("resolve %s: required setting is empty or missing", name)
 	}
 
-	return time.Duration(value) * time.Second
+	if err := isValidURI(*partial.URI); err != nil {
+		return Endpoint{}, fmt.Errorf("resolve %s.uri: %w", name, err)
+	}
+
+	uri, err := url.Parse(*partial.URI)
+	if err != nil {
+		return Endpoint{}, fmt.Errorf("resolve %s.uri: %w", name, err)
+	}
+
+	return Endpoint{URI: *uri, TLSVerify: *partial.TLSVerify, CAPath: *partial.CAPath}, nil
 }
 
-func loadDefaultConfig() (Config, error) {
-	var p Partial
-	if _, err := toml.Decode(etc.ElkDefaultToml, &p); err != nil {
-		return Config{}, fmt.Errorf("decode embedded default configuration: %w", err)
+// resolveProxy parses the configured proxy URI, resolves optional credentials, and bypass rules.
+func resolveProxy(partial dtoProxy) (Proxy, error) {
+	if partial.URI == nil || *partial.URI == "" {
+		return Proxy{}, nil
 	}
 
-	cfg := (Config{}).Update(p)
-
-	return cfg, nil
-}
-
-// Update returns a copy of cfg with values present in p applied. Pointer
-// fields are used by Partial so that false, zero, and empty string values
-// remain distinguishable from fields that were not supplied.
-func (cfg Config) Update(p Partial) Config {
-	if p.Compatibility != nil && p.Compatibility.InterpretLegacyConfigurations != nil {
-		cfg.Compatibility.InterpretLegacy = *p.Compatibility.InterpretLegacyConfigurations
+	if err := isValidURI(*partial.URI); err != nil {
+		return Proxy{}, fmt.Errorf("resolve http.proxy.uri: %w", err)
 	}
 
-	if p.HTTP != nil { //nolint:nestif
-		if p.HTTP.Timeout != nil {
-			if p.HTTP.Timeout.Connect != nil {
-				cfg.HTTP.Timeout.Connect = seconds(*p.HTTP.Timeout.Connect)
-			}
-
-			if p.HTTP.Timeout.Request != nil {
-				cfg.HTTP.Timeout.Request = seconds(*p.HTTP.Timeout.Request)
-			}
-
-			if p.HTTP.Timeout.Idle != nil {
-				cfg.HTTP.Timeout.Idle = seconds(*p.HTTP.Timeout.Idle)
-			}
-		}
-
-		if p.HTTP.Proxy != nil {
-			if p.HTTP.Proxy.URI != nil {
-				cfg.HTTP.Proxy.URI = *p.HTTP.Proxy.URI
-			}
-
-			if p.HTTP.Proxy.User != nil {
-				cfg.HTTP.Proxy.User = *p.HTTP.Proxy.User
-			}
-
-			if p.HTTP.Proxy.Password != nil {
-				cfg.HTTP.Proxy.Password = *p.HTTP.Proxy.Password
-			}
-
-			if p.HTTP.Proxy.NoProxy != nil {
-				cfg.HTTP.Proxy.NoProxy = *p.HTTP.Proxy.NoProxy
-			}
-		}
+	uri, err := url.Parse(*partial.URI)
+	if err != nil {
+		return Proxy{}, fmt.Errorf("resolve http.proxy.uri: %w", err)
 	}
 
-	if p.API == nil {
-		return cfg
+	user, password := "", ""
+	if partial.User != nil {
+		user = *partial.User
 	}
 
-	if p.API.Subscriptions != nil {
-		cfg.API.Subscriptions = cfg.API.Subscriptions.Update(*p.API.Subscriptions)
+	if partial.Password != nil {
+		password = *partial.Password
 	}
 
-	if p.API.Content != nil && p.API.Content.RPM != nil {
-		cfg.API.Content.RPM = cfg.API.Content.RPM.Update(*p.API.Content.RPM)
+	if user != "" || password != "" {
+		uri.User = url.UserPassword(user, password)
 	}
 
-	if p.API.Insights != nil {
-		if p.API.Insights.Ingress != nil {
-			cfg.API.Insights.Ingress = cfg.API.Insights.Ingress.Update(*p.API.Insights.Ingress)
-		}
-
-		if p.API.Insights.Inventory != nil {
-			cfg.API.Insights.Inventory = cfg.API.Insights.Inventory.Update(*p.API.Insights.Inventory)
-		}
+	noProxy := ""
+	if partial.NoProxy != nil {
+		noProxy = strings.TrimSpace(*partial.NoProxy)
 	}
 
-	return cfg
-}
-
-// Update returns a copy of e with values present in p applied.
-func (e Endpoint) Update(p PartialAPIHost) Endpoint {
-	if p.URI != nil {
-		e.URI = *p.URI
-	}
-
-	if p.TLSVerify != nil {
-		e.TLSVerify = *p.TLSVerify
-	}
-
-	if p.CAPath != nil {
-		e.CAPath = *p.CAPath
-	}
-
-	return e
+	return Proxy{
+		URI:     *uri,
+		NoProxy: noProxy,
+	}, nil
 }

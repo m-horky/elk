@@ -1,4 +1,3 @@
-// Package version provides Elk's build version information.
 package version
 
 // Version is the Elk build version.

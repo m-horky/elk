@@ -1,5 +1,3 @@
-// Package candlepin contains the Candlepin client. The API surface is
-// intentionally small while the Candlepin wire contracts are being confirmed.
 package candlepin
 
 import (
