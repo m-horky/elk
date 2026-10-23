@@ -3,6 +3,7 @@ package httpclient
 import (
 	"fmt"
 	"io"
+	"net/http"
 	"strings"
 )
 
@@ -31,14 +32,27 @@ func (e *HTTPError) Error() string {
 
 // readErrorBody reads at most maxErrorBody bytes and reports whether the body was truncated.
 func readErrorBody(r io.Reader) ([]byte, bool) {
-	b, err := io.ReadAll(io.LimitReader(r, maxErrorBody+1))
+	body, truncated, err := readBoundedBody(r, maxErrorBody)
 	if err != nil {
 		return []byte("unable to read error body"), false
 	}
 
-	if len(b) > maxErrorBody {
-		return b[:maxErrorBody], true
+	return body, truncated
+}
+
+// buildHTTPError assembles an *HTTPError from a response and a bounded body.
+func buildHTTPError(resp *http.Response, body []byte, truncated bool) *HTTPError {
+	httpErr := &HTTPError{
+		Status:        resp.Status,
+		StatusCode:    resp.StatusCode,
+		Body:          body,
+		BodyTruncated: truncated,
 	}
 
-	return b, false
+	if resp.Request != nil {
+		httpErr.Method = resp.Request.Method
+		httpErr.URL = sanitizedURL(resp.Request.URL)
+	}
+
+	return httpErr
 }

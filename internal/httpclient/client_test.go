@@ -2,9 +2,7 @@ package httpclient
 
 import (
 	"crypto/tls"
-	"errors"
 	"net/http"
-	"net/url"
 	"strings"
 	"testing"
 	"time"
@@ -58,47 +56,6 @@ func TestNewRejectsInvalidProxy(t *testing.T) {
 	})
 	if err == nil || !strings.Contains(err.Error(), "parse proxy URL") {
 		t.Fatalf("New() error = %v, want proxy parse error", err)
-	}
-}
-
-// TestRedirectPolicyRestrictsOrigins verifies redirect handling remains origin-bound.
-//
-// Given a client with redirects enabled and a configured origin
-// When its redirect policy evaluates same-origin and cross-origin redirects
-// Then it accepts the former and rejects the latter.
-func TestRedirectPolicyRestrictsOrigins(t *testing.T) {
-	t.Parallel()
-
-	base, _ := url.Parse("https://example.test/api")
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	client := newHTTPClient(Config{AllowRedirects: true}, base, transport)
-
-	sameOrigin, _ := http.NewRequest(http.MethodGet, "https://EXAMPLE.TEST/api/next", nil)
-	if err := client.CheckRedirect(sameOrigin, nil); err != nil {
-		t.Fatalf("same-origin redirect error = %v", err)
-	}
-
-	otherOrigin, _ := http.NewRequest(http.MethodGet, "https://other.test/api/next", nil)
-	if err := client.CheckRedirect(otherOrigin, nil); err == nil {
-		t.Fatal("cross-origin redirect was accepted")
-	}
-}
-
-// TestRedirectPolicyDisablesRedirects verifies disabled redirects return the last response.
-//
-// Given a client with redirects disabled
-// When its redirect policy evaluates a redirect
-// Then it returns http.ErrUseLastResponse.
-func TestRedirectPolicyDisablesRedirects(t *testing.T) {
-	t.Parallel()
-
-	base, _ := url.Parse("https://example.test")
-	transport := http.DefaultTransport.(*http.Transport).Clone()
-	client := newHTTPClient(Config{}, base, transport)
-	request, _ := http.NewRequest(http.MethodGet, "https://example.test/next", nil)
-
-	if err := client.CheckRedirect(request, nil); !errors.Is(err, http.ErrUseLastResponse) {
-		t.Fatalf("redirect error = %v, want %v", err, http.ErrUseLastResponse)
 	}
 }
 

@@ -17,16 +17,16 @@ import (
 )
 
 type Config struct {
-	BaseURL        string
-	CAFile         string
-	InsecureTLS    bool
-	ConnectTimeout time.Duration
-	RequestTimeout time.Duration
-	IdleTimeout    time.Duration
-	Proxy          ProxyConfig
-	AllowRedirects bool // restricted to the configured origin
-	Certificate    *tls.Certificate
-	BasicAuth      *BasicAuth
+	BaseURL         string
+	CAFile          string
+	InsecureTLS     bool
+	ConnectTimeout  time.Duration
+	RequestTimeout  time.Duration
+	IdleTimeout     time.Duration
+	Proxy           ProxyConfig
+	Certificate     *tls.Certificate
+	BasicAuth       *BasicAuth
+	MaxResponseBody int64
 }
 
 type BasicAuth struct {
@@ -37,10 +37,11 @@ type BasicAuth struct {
 type ProxyConfig struct{ URI, Username, Password, NoProxy string }
 
 type Client struct {
-	client    *http.Client
-	transport *http.Transport
-	base      *url.URL
-	basicAuth *BasicAuth
+	client          *http.Client
+	transport       *http.Transport
+	base            *url.URL
+	basicAuth       *BasicAuth
+	maxResponseBody int64
 }
 
 // New constructs an HTTP client from the supplied configuration.
@@ -56,6 +57,10 @@ func New(cfg Config) (*Client, error) {
 
 	if cfg.IdleTimeout <= 0 {
 		cfg.IdleTimeout = 120 * time.Second
+	}
+
+	if cfg.MaxResponseBody <= 0 {
+		cfg.MaxResponseBody = defaultMaxResponseBody
 	}
 
 	var roots *x509.CertPool
@@ -78,7 +83,13 @@ func New(cfg Config) (*Client, error) {
 
 	cl := newHTTPClient(cfg, base, tr)
 
-	return &Client{client: cl, transport: tr, base: base, basicAuth: cfg.BasicAuth}, nil
+	return &Client{
+		client:          cl,
+		transport:       tr,
+		base:            base,
+		basicAuth:       cfg.BasicAuth,
+		maxResponseBody: cfg.MaxResponseBody,
+	}, nil
 }
 
 // loadRoots reads and parses a PEM-encoded certificate authority bundle.
@@ -113,7 +124,7 @@ func newTransport(cfg Config, roots *x509.CertPool) (*http.Transport, error) {
 	dialer := &net.Dialer{Timeout: cfg.ConnectTimeout}
 	tr.DialContext = dialer.DialContext
 	tr.IdleConnTimeout = cfg.IdleTimeout
-	tr.Proxy = http.ProxyFromEnvironment
+	tr.Proxy = nil // Disable environment-provided proxies.
 
 	if cfg.Proxy.URI != "" {
 		u, err := url.Parse(cfg.Proxy.URI)
@@ -145,12 +156,6 @@ func newHTTPClient(cfg Config, base *url.URL, tr *http.Transport) *http.Client {
 	cl.Transport = withUserAgent(tr)
 	cl.Timeout = cfg.RequestTimeout
 	cl.CheckRedirect = func(req *http.Request, via []*http.Request) error {
-		if !cfg.AllowRedirects {
-			slog.Debug("HTTP redirect not followed", "url", sanitizedURL(req.URL), "reason", "redirects disabled")
-
-			return http.ErrUseLastResponse
-		}
-
 		if req.URL.Scheme != base.Scheme || !strings.EqualFold(req.URL.Host, base.Host) {
 			slog.Debug("HTTP redirect rejected", "url", sanitizedURL(req.URL), "reason", "origin not approved")
 

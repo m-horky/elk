@@ -2,6 +2,7 @@ package httpclient
 
 import (
 	"errors"
+	"fmt"
 	"net/url"
 	"path"
 )
@@ -19,7 +20,10 @@ func parseBaseURL(raw string) (*url.URL, error) {
 // URL resolves a path against the client's configured base URL.
 func (c *Client) URL(p string) (string, error) { return JoinURL(c.base, p) }
 
-// JoinURL resolves a path against a base URL while preserving the base path.
+// JoinURL resolves the path against a base URL.
+//
+// Callers are responsible for escaping user-provided path segments with
+// url.PathEscape before passing them in p.
 func JoinURL(base *url.URL, p string) (string, error) {
 	if base == nil {
 		return "", errors.New("nil base URL")
@@ -27,8 +31,15 @@ func JoinURL(base *url.URL, p string) (string, error) {
 
 	u := *base
 	// Preserve a configured base path: the probe's "/" is the service root.
-	u.Path = path.Join("/", base.Path, p)
-	u.RawPath = ""
+	joined := path.Join("/", base.EscapedPath(), p)
+
+	decoded, err := url.PathUnescape(joined)
+	if err != nil {
+		return "", fmt.Errorf("unescape request path: %w", err)
+	}
+
+	u.Path = decoded
+	u.RawPath = joined
 
 	return u.String(), nil
 }

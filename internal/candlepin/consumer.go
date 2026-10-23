@@ -2,10 +2,13 @@ package candlepin
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log/slog"
 	"net/http"
 	"net/url"
+
+	"github.com/m-horky/elk/internal/httpclient"
 )
 
 // CreateConsumerRequest contains the JSON body used to register a consumer.
@@ -47,9 +50,18 @@ func (c *Client) CreateConsumer(
 
 	var consumer Consumer
 
-	_, err := c.http.DoJSON(ctx, http.MethodPost, "/consumers", query, request, &consumer)
+	httpRequest, err := httpclient.NewJSONRequest(http.MethodPost, "/consumers", query, request)
 	if err != nil {
 		return Consumer{}, fmt.Errorf("create consumer: %w", err)
+	}
+
+	response, err := c.http.Do(ctx, httpRequest)
+	if err != nil {
+		return Consumer{}, fmt.Errorf("create consumer: %w", err)
+	}
+
+	if err := json.Unmarshal(response.Body, &consumer); err != nil {
+		return Consumer{}, fmt.Errorf("decode consumer: %w", err)
 	}
 
 	slog.Debug("Candlepin consumer received")
@@ -68,7 +80,7 @@ func (c *Client) DeleteConsumer(ctx context.Context, uuid string) error {
 	path := "/consumers/" + url.PathEscape(uuid)
 	slog.Debug("deleting Candlepin consumer", "uuid", uuid)
 
-	if _, err := c.http.DoJSON(ctx, http.MethodDelete, path, nil, nil, nil); err != nil {
+	if _, err := c.http.Do(ctx, httpclient.Request{Method: http.MethodDelete, Path: path}); err != nil {
 		return fmt.Errorf("delete consumer: %w", err)
 	}
 

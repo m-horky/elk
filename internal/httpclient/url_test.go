@@ -55,6 +55,40 @@ func TestJoinURLPreservesBasePathAndRemovesSecrets(t *testing.T) {
 	}
 }
 
+// TestJoinURLPreservesEscapedPathSegments verifies escaped path segments are not escaped twice.
+//
+// Given a base URL and a path containing an escaped slash, when the path is joined,
+// then the escaped segment is preserved in the resulting URL.
+func TestJoinURLPreservesEscapedPathSegments(t *testing.T) {
+	t.Parallel()
+
+	base, _ := url.Parse("https://example.test/api")
+
+	got, err := JoinURL(base, "/users/"+url.PathEscape("a/b")+"/owners")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := "https://example.test/api/users/a%2Fb/owners"
+	if got != want {
+		t.Fatalf("JoinURL() = %q, want %q", got, want)
+	}
+}
+
+// TestJoinURLRejectsInvalidEscaping verifies malformed escapes are rejected.
+//
+// Given a request path with an invalid percent escape, when the path is joined,
+// then JoinURL returns an error instead of producing an unsafe URL.
+func TestJoinURLRejectsInvalidEscaping(t *testing.T) {
+	t.Parallel()
+
+	base, _ := url.Parse("https://example.test/api")
+
+	if _, err := JoinURL(base, "/users/%zz"); err == nil {
+		t.Fatal("JoinURL() accepted invalid escaping")
+	}
+}
+
 // TestJoinURLRejectsNilBase verifies nil base URLs are rejected.
 //
 // Given a nil base URL

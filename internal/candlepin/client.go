@@ -3,6 +3,7 @@ package candlepin
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"log/slog"
 
@@ -49,7 +50,18 @@ func NewProbeClient(cfg Config) (*Client, error) {
 }
 
 // Probe performs a connectivity check against the Candlepin service root.
-func (c *Client) Probe(ctx context.Context) (int, error) { return c.http.Get(ctx, "/") } //nolint:wrapcheck
+func (c *Client) Probe(ctx context.Context) (int, error) {
+	response, err := c.http.Get(ctx, "/")
+	if err != nil {
+		if httpErr, ok := errors.AsType[*httpclient.HTTPError](err); ok {
+			return httpErr.StatusCode, fmt.Errorf("probe Candlepin: %w", err)
+		}
+
+		return 0, fmt.Errorf("probe Candlepin: %w", err)
+	}
+
+	return response.StatusCode, nil
+}
 
 // Close releases the resources held by the Candlepin client.
 func (c *Client) Close() error { return c.http.Close() } //nolint:wrapcheck
