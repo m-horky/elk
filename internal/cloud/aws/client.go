@@ -8,19 +8,17 @@ import (
 	"log/slog"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
+	"github.com/m-horky/elk/internal/cloud/imds"
 	"github.com/m-horky/elk/internal/httpclient"
 )
 
 const (
 	// tokenTTLSeconds is the lifetime requested for IMDSv2 session tokens.
 	tokenTTLSeconds = 3600
-	// defaultTimeout bounds both connecting to and requesting from the IMDS.
-	defaultTimeout = time.Second
-	// maxResponseBody caps every IMDS response; all real responses are tiny.
-	maxResponseBody = 512 << 10
 	// apiPath is the IMDSv2 session token endpoint.
 	apiPath = "/latest/api/token"
 	// documentPath is the EC2 instance identity document endpoint.
@@ -46,8 +44,8 @@ type Client struct {
 	token string
 }
 
-// InstanceIdentity is the EC2 instance identity document and its signature.
-type InstanceIdentity struct {
+// Metadata is the EC2 instance identity document and its signature.
+type Metadata struct {
 	// Document is the parsed instance identity document.
 	Document IdentityDocument
 	// Signature is the raw base64 rsa2048 signature of the document.
@@ -73,30 +71,16 @@ type IdentityDocument struct {
 	Version                 string    `json:"version"`
 }
 
-// NewClient constructs an AWS IMDS client. Responses are capped at 512 KiB
-// and configured proxies are ignored so metadata traffic stays on the
+// NewClient constructs an AWS IMDS client. The HTTP client is configured
+// with the shared IMDS defaults: 30 second connect and request timeouts, a
+// 512 KiB response cap, and no proxy, so metadata traffic stays on the
 // link-local path.
 func NewClient(cfg Config) (*Client, error) {
 	slog.Debug("constructing AWS IMDS client")
 
-	if cfg.HTTP.ConnectTimeout <= 0 {
-		cfg.HTTP.ConnectTimeout = defaultTimeout
-	}
-
-	if cfg.HTTP.RequestTimeout <= 0 {
-		cfg.HTTP.RequestTimeout = defaultTimeout
-	}
-
-	if cfg.HTTP.MaxResponseBody <= 0 || cfg.HTTP.MaxResponseBody > maxResponseBody {
-		cfg.HTTP.MaxResponseBody = maxResponseBody
-	}
-
-	// Ignore proxy, if set; IMDS needs to be accessed locally.
-	cfg.HTTP.Proxy.URI = ""
-
-	client, err := httpclient.New(cfg.HTTP)
+	client, err := imds.NewClient(cfg.HTTP)
 	if err != nil {
-		return nil, fmt.Errorf("construct AWS IMDS HTTP client: %w", err)
+		return nil, fmt.Errorf("construct AWS IMDS client: %w", err)
 	}
 
 	return &Client{http: client}, nil
@@ -111,10 +95,10 @@ func (c *Client) Close() error {
 	return nil
 }
 
-// InstanceIdentity returns the EC2 instance identity with its signature.
-// It returns an error when the IMDS does not answer with a valid AWS
-// instance identity document.
-func (c *Client) InstanceIdentity(ctx context.Context) (*InstanceIdentity, error) {
+// Collect returns the EC2 instance identity with its signature. It returns
+// an error when the IMDS does not answer with a valid AWS instance identity
+// document.
+func (c *Client) Collect(ctx context.Context) (*Metadata, error) {
 	document, token, err := c.document(ctx)
 	if err != nil {
 		return nil, err
@@ -125,8 +109,11 @@ func (c *Client) InstanceIdentity(ctx context.Context) (*InstanceIdentity, error
 		return nil, err
 	}
 
-	return &InstanceIdentity{Document: *document, Signature: signature}, nil
+	return &Metadata{Document: *document, Signature: signature}, nil
 }
+
+// TODO: refactor the token refresh-retry flow so that the signature fetch
+//  shares it and the token-rejection path is covered by tests.
 
 // document fetches and validates the instance identity document, refreshing
 // the session token once when the IMDS rejects the held one.
@@ -188,11 +175,12 @@ func (c *Client) signature(ctx context.Context, token string) (string, error) {
 		return "", fmt.Errorf("request AWS instance identity signature: %w", err)
 	}
 
-	return string(resp.Body), nil
+	return strings.TrimSpace(string(resp.Body)), nil
 }
 
 // sessionToken returns the held IMDSv2 token or fetches a new one. A forced
-// refresh fetches a new token even when one is already held.
+// refresh fetches a new token even when one is already held. The mutex is
+// held across the fetch so concurrent callers reuse a single token.
 func (c *Client) sessionToken(ctx context.Context, force bool) (string, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()

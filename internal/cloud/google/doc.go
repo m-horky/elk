@@ -5,7 +5,7 @@
 //		HTTP: httpclient.Config{BaseURL: constants.Address(constants.GoogleIMDSAddress)},
 //	})
 //	defer client.Close()
-//	identity, err := client.Identity(ctx)
+//	identity, err := client.Collect(ctx)
 //	instanceID := identity.Claims.ComputeEngine.InstanceID
 //
 // A successful call returns the raw identity JWT together with its decoded

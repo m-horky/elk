@@ -5,9 +5,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"sync"
 	"testing"
 
+	"github.com/m-horky/elk/internal/cloud/imds"
 	"github.com/m-horky/elk/internal/httpclient"
 )
 
@@ -108,11 +110,11 @@ func (r *requestRecorder) snapshot() []recordedRequest {
 	return append([]recordedRequest(nil), r.requests...)
 }
 
-// TestMetadata verifies both IMDS requests are header-gated and version-pinned.
+// TestCollect verifies both IMDS requests are header-gated and version-pinned.
 //
-// Given a fake IMDS, when Metadata is called, then both requests are GETs carrying
+// Given a fake IMDS, when Collect is called, then both requests are GETs carrying
 // the Metadata: true header and the pinned api-version, instance before attested.
-func TestMetadata(t *testing.T) {
+func TestCollect(t *testing.T) {
 	t.Parallel()
 
 	recorder := new(requestRecorder)
@@ -120,8 +122,8 @@ func TestMetadata(t *testing.T) {
 	server := httptest.NewServer(instanceAndAttestedHandler(t, validInstanceJSON, validAttestedJSON, recorder.record))
 	defer server.Close()
 
-	if _, err := newTestClient(t, server).Metadata(context.Background()); err != nil {
-		t.Fatalf("Metadata() error = %v", err)
+	if _, err := newTestClient(t, server).Collect(context.Background()); err != nil {
+		t.Fatalf("Collect() error = %v", err)
 	}
 
 	requests := recorder.snapshot()
@@ -151,7 +153,7 @@ func TestMetadata(t *testing.T) {
 
 // TestNon2xx verifies a rejected instance request fails collection.
 //
-// Given a fake IMDS answering the instance request with 500, when Metadata is called,
+// Given a fake IMDS answering the instance request with 500, when Collect is called,
 // then it returns (nil, err) and never requests the attested document.
 func TestNon2xx(t *testing.T) {
 	t.Parallel()
@@ -164,13 +166,13 @@ func TestNon2xx(t *testing.T) {
 	}))
 	defer server.Close()
 
-	metadata, err := newTestClient(t, server).Metadata(context.Background())
+	metadata, err := newTestClient(t, server).Collect(context.Background())
 	if err == nil {
-		t.Fatal("Metadata() error = nil, want error for non-2xx instance response")
+		t.Fatal("Collect() error = nil, want error for non-2xx instance response")
 	}
 
 	if metadata != nil {
-		t.Errorf("Metadata() = %+v, want nil metadata", metadata)
+		t.Errorf("Collect() = %+v, want nil metadata", metadata)
 	}
 
 	if requests := recorder.snapshot(); len(requests) != 1 || requests[0].path != instancePath {
@@ -196,12 +198,39 @@ func TestNon2xxAttestation(t *testing.T) {
 	}))
 	defer server.Close()
 
-	metadata, err := newTestClient(t, server).Metadata(context.Background())
+	metadata, err := newTestClient(t, server).Collect(context.Background())
 	if err == nil {
-		t.Fatal("Metadata() error = nil, want error for non-2xx attested response")
+		t.Fatal("Collect() error = nil, want error for non-2xx attested response")
 	}
 
 	if metadata != nil {
-		t.Errorf("Metadata() = %+v, want nil metadata", metadata)
+		t.Errorf("Collect() = %+v, want nil metadata", metadata)
+	}
+}
+
+// TestCollectRejectsOversizedResponse verifies the response body cap.
+//
+// Given a fake IMDS that serves an instance document larger than 512 KiB,
+// when Collect is called,
+// then collection fails with a body-limit error.
+func TestCollectRejectsOversizedResponse(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(strings.Repeat("x", imds.MaxResponseBody+1)))
+	}))
+	defer server.Close()
+
+	metadata, err := newTestClient(t, server).Collect(context.Background())
+	if err == nil {
+		t.Fatal("Collect() error = nil, want error for oversized response")
+	}
+
+	if metadata != nil {
+		t.Errorf("Collect() = %+v, want nil metadata", metadata)
+	}
+
+	if !strings.Contains(err.Error(), "exceeds") {
+		t.Errorf("Collect() error = %q, want a body-limit error", err)
 	}
 }

@@ -5,7 +5,7 @@
 //		HTTP: httpclient.Config{BaseURL: constants.Address(constants.AzureIMDSAddress)},
 //	})
 //	defer client.Close()
-//	metadata, err := client.Metadata(ctx)
+//	metadata, err := client.Collect(ctx)
 //	vmid := metadata.Instance.Compute.VMID
 //
 // A successful call returns the parsed instance document together with the

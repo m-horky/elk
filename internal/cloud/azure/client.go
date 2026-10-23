@@ -7,18 +7,14 @@ import (
 	"log/slog"
 	"net/http"
 	"net/url"
-	"time"
 
+	"github.com/m-horky/elk/internal/cloud/imds"
 	"github.com/m-horky/elk/internal/httpclient"
 )
 
 const (
 	// apiVersion is the pinned Azure IMDS API version.
 	apiVersion = "2023-07-01"
-	// timeout is the request and connect timeout for Azure IMDS traffic.
-	timeout = 10 * time.Second
-	// maxResponseBody caps every IMDS response; all real responses are tiny.
-	maxResponseBody = 512 << 10
 	// instancePath is the Azure IMDS instance document endpoint.
 	instancePath = "/metadata/instance"
 	// attestedPath is the Azure IMDS attested document endpoint.
@@ -26,7 +22,10 @@ const (
 )
 
 // Config configures the Azure IMDS client.
-type Config struct{ HTTP httpclient.Config }
+type Config struct {
+	// HTTP is the shared HTTP client configuration, including the IMDS base URL.
+	HTTP httpclient.Config
+}
 
 // Client is a client for the Microsoft Azure instance metadata service.
 type Client struct{ http *httpclient.Client }
@@ -69,31 +68,16 @@ type Attested struct {
 	PKCS7     string `json:"pkcs7"`
 }
 
-// NewClient constructs an Azure IMDS client. Request and connect timeouts
-// default to the Azure IMDS timeout unless the supplied configuration sets
-// explicit values. Responses are capped at 512 KiB and configured proxies are
-// ignored so metadata traffic stays on the link-local path.
+// NewClient constructs an Azure IMDS client. The HTTP client is configured
+// with the shared IMDS defaults: 30 second connect and request timeouts, a
+// 512 KiB response cap, and no proxy, so metadata traffic stays on the
+// link-local path.
 func NewClient(cfg Config) (*Client, error) {
 	slog.Debug("constructing Azure IMDS client")
 
-	if cfg.HTTP.RequestTimeout <= 0 {
-		cfg.HTTP.RequestTimeout = timeout
-	}
-
-	if cfg.HTTP.ConnectTimeout <= 0 {
-		cfg.HTTP.ConnectTimeout = timeout
-	}
-
-	if cfg.HTTP.MaxResponseBody <= 0 || cfg.HTTP.MaxResponseBody > maxResponseBody {
-		cfg.HTTP.MaxResponseBody = maxResponseBody
-	}
-
-	// Ignore proxy, if set; IMDS needs to be accessed locally.
-	cfg.HTTP.Proxy.URI = ""
-
-	client, err := httpclient.New(cfg.HTTP)
+	client, err := imds.NewClient(cfg.HTTP)
 	if err != nil {
-		return nil, fmt.Errorf("construct Azure IMDS HTTP client: %w", err)
+		return nil, fmt.Errorf("construct Azure IMDS client: %w", err)
 	}
 
 	return &Client{http: client}, nil
@@ -108,10 +92,10 @@ func (c *Client) Close() error {
 	return nil
 }
 
-// Metadata returns the Azure instance metadata with its attested document.
+// Collect returns the Azure instance metadata with its attested document.
 // It returns an error when the IMDS does not answer with valid Azure
 // instance metadata.
-func (c *Client) Metadata(ctx context.Context) (*Metadata, error) {
+func (c *Client) Collect(ctx context.Context) (*Metadata, error) {
 	slog.Debug("collecting Azure instance metadata")
 
 	instance, err := c.instance(ctx)

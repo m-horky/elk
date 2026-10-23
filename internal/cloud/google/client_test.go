@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/m-horky/elk/internal/cloud/imds"
 	"github.com/m-horky/elk/internal/httpclient"
 )
 
@@ -74,13 +75,13 @@ func tokenServer(t *testing.T, token string) *httptest.Server {
 	return server
 }
 
-// TestIdentitySendsMetadataRequest verifies the identity request contract.
+// TestCollectSendsMetadataRequest verifies the identity request contract.
 //
 // Given a fake Google IMDS that returns a valid identity token
-// When Identity is called
+// When Collect is called
 // Then the request carries the flavor header and the audience, format and
 // licenses query parameters, and the decoded identity is returned.
-func TestIdentitySendsMetadataRequest(t *testing.T) {
+func TestCollectSendsMetadataRequest(t *testing.T) {
 	t.Parallel()
 
 	token := newToken(t, validClaims)
@@ -93,9 +94,9 @@ func TestIdentitySendsMetadataRequest(t *testing.T) {
 	}))
 	t.Cleanup(server.Close)
 
-	identity, err := newTestClient(t, server).Identity(context.Background())
+	identity, err := newTestClient(t, server).Collect(context.Background())
 	if err != nil {
-		t.Fatalf("Identity() error = %v", err)
+		t.Fatalf("Collect() error = %v", err)
 	}
 
 	if received.Method != http.MethodGet {
@@ -124,17 +125,17 @@ func TestIdentitySendsMetadataRequest(t *testing.T) {
 	}
 
 	if identity == nil {
-		t.Fatal("Identity() = nil, want identity")
+		t.Fatal("Collect() = nil, want identity")
 	}
 }
 
-// TestIdentityPreservesNumericClaims verifies numeric claims are not rounded.
+// TestCollectPreservesNumericClaims verifies numeric claims are not rounded.
 //
 // Given an identity token with a project_number larger than 2^53 and a numeric
 // instance_id
-// When Identity is called
+// When Collect is called
 // Then the decoded claims contain every original digit.
-func TestIdentityPreservesNumericClaims(t *testing.T) {
+func TestCollectPreservesNumericClaims(t *testing.T) {
 	t.Parallel()
 
 	claims := `{
@@ -153,9 +154,9 @@ func TestIdentityPreservesNumericClaims(t *testing.T) {
 
 	server := tokenServer(t, newToken(t, claims))
 
-	identity, err := newTestClient(t, server).Identity(context.Background())
+	identity, err := newTestClient(t, server).Collect(context.Background())
 	if err != nil {
-		t.Fatalf("Identity() error = %v", err)
+		t.Fatalf("Collect() error = %v", err)
 	}
 
 	engine := identity.Claims.Google.ComputeEngine
@@ -168,23 +169,23 @@ func TestIdentityPreservesNumericClaims(t *testing.T) {
 	}
 }
 
-// TestIdentityReturnsIdentity verifies the populated identity contract.
+// TestCollectReturnsMetadata verifies the populated identity contract.
 //
 // Given a fake Google IMDS that returns a valid identity token
-// When Identity is called
+// When Collect is called
 // Then a non-nil identity is returned together with a nil error.
-func TestIdentityReturnsIdentity(t *testing.T) {
+func TestCollectReturnsMetadata(t *testing.T) {
 	t.Parallel()
 
 	server := tokenServer(t, newToken(t, validClaims))
 
-	identity, err := newTestClient(t, server).Identity(context.Background())
+	identity, err := newTestClient(t, server).Collect(context.Background())
 	if err != nil {
-		t.Fatalf("Identity() error = %v", err)
+		t.Fatalf("Collect() error = %v", err)
 	}
 
 	if identity == nil {
-		t.Fatal("Identity() = nil, want identity")
+		t.Fatal("Collect() = nil, want identity")
 	}
 
 	if identity.Claims.Audience != audience {
@@ -216,12 +217,12 @@ func TestIdentityReturnsIdentity(t *testing.T) {
 	}
 }
 
-// TestIdentityRejectsInvalidResponses verifies failure responses return errors.
+// TestCollectRejectsInvalidResponses verifies failure responses return errors.
 //
 // Given a fake Google IMDS that returns a non-2xx status or an invalid token
-// When Identity is called
+// When Collect is called
 // Then a nil identity and a descriptive error are returned.
-func TestIdentityRejectsInvalidResponses(t *testing.T) {
+func TestCollectRejectsInvalidResponses(t *testing.T) {
 	t.Parallel()
 
 	invalidClaims := map[string]string{
@@ -242,13 +243,13 @@ func TestIdentityRejectsInvalidResponses(t *testing.T) {
 
 			server := tokenServer(t, token)
 
-			identity, err := newTestClient(t, server).Identity(context.Background())
+			identity, err := newTestClient(t, server).Collect(context.Background())
 			if err == nil {
-				t.Fatal("Identity() error = nil, want error")
+				t.Fatal("Collect() error = nil, want error")
 			}
 
 			if identity != nil {
-				t.Fatalf("Identity() = %+v, want nil", identity)
+				t.Fatalf("Collect() = %+v, want nil", identity)
 			}
 		})
 	}
@@ -261,67 +262,67 @@ func TestIdentityRejectsInvalidResponses(t *testing.T) {
 		}))
 		t.Cleanup(server.Close)
 
-		identity, err := newTestClient(t, server).Identity(context.Background())
+		identity, err := newTestClient(t, server).Collect(context.Background())
 		if err == nil {
-			t.Fatal("Identity() error = nil, want error")
+			t.Fatal("Collect() error = nil, want error")
 		}
 
 		if identity != nil {
-			t.Fatalf("Identity() = %+v, want nil", identity)
+			t.Fatalf("Collect() = %+v, want nil", identity)
 		}
 
 		if !strings.Contains(err.Error(), "403") {
-			t.Errorf("Identity() error = %v, want status 403", err)
+			t.Errorf("Collect() error = %v, want status 403", err)
 		}
 	})
 }
 
-// TestIdentityRejectsTransportFailure verifies transport failures are errors.
+// TestCollectRejectsTransportFailure verifies transport failures are errors.
 //
 // Given a fake Google IMDS server that has been shut down
-// When Identity is called
+// When Collect is called
 // Then a nil identity and a wrapped transport error are returned.
-func TestIdentityRejectsTransportFailure(t *testing.T) {
+func TestCollectRejectsTransportFailure(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
 	client := newTestClient(t, server)
 	server.Close()
 
-	identity, err := client.Identity(context.Background())
+	identity, err := client.Collect(context.Background())
 	if err == nil {
-		t.Fatal("Identity() error = nil, want error")
+		t.Fatal("Collect() error = nil, want error")
 	}
 
 	if identity != nil {
-		t.Fatalf("Identity() = %+v, want nil", identity)
+		t.Fatalf("Collect() = %+v, want nil", identity)
 	}
 }
 
-// TestIdentityRejectsOversizedResponse verifies the response body cap.
+// TestCollectRejectsOversizedResponse verifies the response body cap.
 //
-// Given a Google IMDS that serves an identity token larger than 128 KiB,
-// When Identity is called,
+// Given a Google IMDS that serves an identity token larger than 512 KiB,
+// When Collect is called,
 // Then collection fails with a body-limit error.
-func TestIdentityRejectsOversizedResponse(t *testing.T) {
+func TestCollectRejectsOversizedResponse(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		_, _ = fmt.Fprint(w, strings.Repeat("x", maxResponseBody+1))
+		_, _ = fmt.Fprint(w, strings.Repeat("x", imds.MaxResponseBody+1))
 	}))
 	defer server.Close()
 
-	identity, err := newTestClient(t, server).Identity(context.Background())
+	identity, err := newTestClient(t, server).Collect(context.Background())
 	if err == nil {
-		t.Fatal("Identity() error = nil, want error")
+		t.Fatal("Collect() error = nil, want error")
 	}
 
 	if identity != nil {
-		t.Fatalf("Identity() = %+v, want nil", identity)
+		t.Fatalf("Collect() = %+v, want nil", identity)
 	}
 
 	if !strings.Contains(err.Error(), "exceeds") {
-		t.Errorf("Identity() error = %q, want a body-limit error", err)
+		t.Errorf("Collect() error = %q, want a body-limit error", err)
 	}
 }
 

@@ -9,8 +9,8 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
-	"time"
 
+	"github.com/m-horky/elk/internal/cloud/imds"
 	"github.com/m-horky/elk/internal/httpclient"
 )
 
@@ -19,54 +19,43 @@ const (
 	audience = "https://subscription.rhsm.redhat.com:443/subscription"
 	// identityPath is the Compute Engine service account identity endpoint.
 	identityPath = "/computeMetadata/v1/instance/service-accounts/default/identity"
-	// defaultConnectTimeout bounds establishing a connection to the IMDS.
-	defaultConnectTimeout = time.Second
-	// defaultRequestTimeout bounds a complete request to the IMDS.
-	defaultRequestTimeout = time.Second
-	// maxResponseBody caps every IMDS response; identity tokens are tiny.
-	maxResponseBody = 512 << 10
 )
 
-type (
-	// Config configures the Google IMDS client.
-	Config struct{ HTTP httpclient.Config }
-)
+// Config configures the Google IMDS client.
+type Config struct {
+	// HTTP is the shared HTTP client configuration, including the IMDS base URL.
+	HTTP httpclient.Config
+}
 
 // Client is a Google Compute Engine instance metadata client.
 type Client struct{ http *httpclient.Client }
 
+// Metadata is the Google instance identity token and its decoded claims.
+type Metadata struct {
+	// Token is the raw JWT returned by the identity endpoint.
+	Token string
+	// Claims are the decoded claims of the token.
+	Claims Claims
+}
+
 // NewClient constructs a Google IMDS client from the supplied configuration.
-// Responses are capped and configured proxies are ignored so
+// The HTTP client is configured with the shared IMDS defaults: 30 second
+// connect and request timeouts, a 512 KiB response cap, and no proxy, so
 // metadata traffic stays on the link-local path.
 func NewClient(cfg Config) (*Client, error) {
 	slog.Debug("constructing Google IMDS client")
 
-	if cfg.HTTP.ConnectTimeout <= 0 {
-		cfg.HTTP.ConnectTimeout = defaultConnectTimeout
-	}
-
-	if cfg.HTTP.RequestTimeout <= 0 {
-		cfg.HTTP.RequestTimeout = defaultRequestTimeout
-	}
-
-	if cfg.HTTP.MaxResponseBody <= 0 || cfg.HTTP.MaxResponseBody > maxResponseBody {
-		cfg.HTTP.MaxResponseBody = maxResponseBody
-	}
-
-	// Ignore proxy, if set; IMDS needs to be accessed locally.
-	cfg.HTTP.Proxy.URI = ""
-
-	client, err := httpclient.New(cfg.HTTP)
+	client, err := imds.NewClient(cfg.HTTP)
 	if err != nil {
-		return nil, fmt.Errorf("construct Google IMDS HTTP client: %w", err)
+		return nil, fmt.Errorf("construct Google IMDS client: %w", err)
 	}
 
 	return &Client{http: client}, nil
 }
 
-// Identity returns the Google instance identity. It returns an error when the
-// IMDS does not answer with a valid Google identity token.
-func (c *Client) Identity(ctx context.Context) (*Identity, error) {
+// Collect returns the Google instance identity. It returns an error when
+// the IMDS does not answer with a valid Google identity token.
+func (c *Client) Collect(ctx context.Context) (*Metadata, error) {
 	query := url.Values{
 		"audience": {audience},
 		"format":   {"full"},
@@ -84,12 +73,12 @@ func (c *Client) Identity(ctx context.Context) (*Identity, error) {
 		return nil, fmt.Errorf("request Google instance identity: %w", err)
 	}
 
-	identity, err := decodeIdentity(resp.Body)
+	metadata, err := decodeMetadata(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("decode Google instance identity: %w", err)
+		return nil, fmt.Errorf("decode Google instance metadata: %w", err)
 	}
 
-	return identity, nil
+	return metadata, nil
 }
 
 // Close releases the resources held by the Google IMDS client.
@@ -101,16 +90,8 @@ func (c *Client) Close() error {
 	return nil
 }
 
-// Identity is the Google instance identity token and its decoded claims.
-type Identity struct {
-	// Token is the raw JWT returned by the identity endpoint.
-	Token string
-	// Claims are the decoded claims of the token.
-	Claims Claims
-}
-
-// decodeIdentity decodes the JWT from the identity endpoint into an Identity.
-func decodeIdentity(body []byte) (*Identity, error) {
+// decodeMetadata decodes the JWT from the identity endpoint into Metadata.
+func decodeMetadata(body []byte) (*Metadata, error) {
 	token := strings.TrimSpace(string(body))
 
 	segments := strings.Split(token, ".")
@@ -132,5 +113,5 @@ func decodeIdentity(body []byte) (*Identity, error) {
 		return nil, err
 	}
 
-	return &Identity{Token: token, Claims: claims}, nil
+	return &Metadata{Token: token, Claims: claims}, nil
 }

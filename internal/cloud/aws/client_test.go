@@ -8,6 +8,7 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/m-horky/elk/internal/cloud/imds"
 	"github.com/m-horky/elk/internal/httpclient"
 )
 
@@ -41,13 +42,13 @@ func newTestClient(t *testing.T, server *httptest.Server) *Client {
 	return client
 }
 
-// TestInstanceIdentity verifies the full IMDSv2 flow.
+// TestCollect verifies the full IMDSv2 flow.
 //
 // Given an IMDS that issues a token and serves a valid document and signature,
 // when the instance identity is requested, then the token request carries the TTL,
-// the document request carries the token, and the parsed document and
-// verbatim signature are returned.
-func TestInstanceIdentity(t *testing.T) {
+// the document request carries the token, and the parsed document and the
+// whitespace-trimmed signature are returned.
+func TestCollect(t *testing.T) {
 	t.Parallel()
 
 	var tokenRequests, documentRequests, signatureRequests atomic.Int32
@@ -81,16 +82,20 @@ func TestInstanceIdentity(t *testing.T) {
 				t.Errorf("signature token header = %q, want %q", got, "TOKEN-ONE")
 			}
 
-			_, _ = w.Write([]byte("U0lHTkFUVVJF"))
+			_, _ = w.Write([]byte("U0lHTkFUVVJF\n"))
 		default:
 			http.NotFound(w, r)
 		}
 	}))
 	defer server.Close()
 
-	_, err := newTestClient(t, server).InstanceIdentity(context.Background())
+	identity, err := newTestClient(t, server).Collect(context.Background())
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	if identity.Signature != "U0lHTkFUVVJF" {
+		t.Errorf("Signature = %q, want %q", identity.Signature, "U0lHTkFUVVJF")
 	}
 
 	assertRequestCounts(t, tokenRequests.Load(), documentRequests.Load(), signatureRequests.Load())
@@ -135,7 +140,7 @@ func TestTokenIsCached(t *testing.T) {
 	client := newTestClient(t, server)
 
 	for range 2 {
-		if _, err := client.InstanceIdentity(context.Background()); err != nil {
+		if _, err := client.Collect(context.Background()); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -149,12 +154,12 @@ func TestTokenIsCached(t *testing.T) {
 	}
 }
 
-// TestInstanceIdentityRejectsOversizedResponse verifies the response body cap.
+// TestCollectRejectsOversizedResponse verifies the response body cap.
 //
 // Given an IMDS that serves a document larger than 512 KiB,
 // when the instance identity is requested,
 // then collection fails with a body-limit error.
-func TestInstanceIdentityRejectsOversizedResponse(t *testing.T) {
+func TestCollectRejectsOversizedResponse(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -164,11 +169,11 @@ func TestInstanceIdentityRejectsOversizedResponse(t *testing.T) {
 			return
 		}
 
-		_, _ = w.Write([]byte(strings.Repeat("x", maxResponseBody+1)))
+		_, _ = w.Write([]byte(strings.Repeat("x", imds.MaxResponseBody+1)))
 	}))
 	defer server.Close()
 
-	_, err := newTestClient(t, server).InstanceIdentity(context.Background())
+	_, err := newTestClient(t, server).Collect(context.Background())
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
