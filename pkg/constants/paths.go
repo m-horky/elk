@@ -18,6 +18,7 @@ const (
 	OSReleasePath     pathID = "ELK_OS_RELEASE"
 	LSCPUBin          pathID = "ELK_BIN_LSCPU"
 	VirtWhatBin       pathID = "ELK_BIN_VIRT_WHAT"
+	CloudCacheDir     pathID = "ELK_CLOUD_CACHE_DIR"
 )
 
 var paths = map[pathID]string{ //nolint:gochecknoglobals
@@ -34,6 +35,7 @@ var paths = map[pathID]string{ //nolint:gochecknoglobals
 	OSReleasePath:     "/usr/lib/os-release",
 	LSCPUBin:          "/usr/bin/lscpu",
 	VirtWhatBin:       "/usr/sbin/virt-what",
+	CloudCacheDir:     "/var/cache/elk/cloud",
 }
 
 // Path returns the system path for name, preferring a non-empty environment override.
