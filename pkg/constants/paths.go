@@ -15,6 +15,9 @@ const (
 	EntitlementDir    pathID = "ELK_ENTITLEMENT_DIR"
 	ProductDir        pathID = "ELK_PRODUCT_DIR"
 	DefaultProductDir pathID = "ELK_DEFAULT_PRODUCT_DIR"
+	OSReleasePath     pathID = "ELK_OS_RELEASE"
+	LSCPUBin          pathID = "ELK_BIN_LSCPU"
+	VirtWhatBin       pathID = "ELK_BIN_VIRT_WHAT"
 )
 
 var paths = map[pathID]string{ //nolint:gochecknoglobals
@@ -28,6 +31,9 @@ var paths = map[pathID]string{ //nolint:gochecknoglobals
 	EntitlementDir:    "/etc/pki/entitlement",
 	ProductDir:        "/etc/pki/product",
 	DefaultProductDir: "/etc/pki/product-default",
+	OSReleasePath:     "/usr/lib/os-release",
+	LSCPUBin:          "/usr/bin/lscpu",
+	VirtWhatBin:       "/usr/sbin/virt-what",
 }
 
 // Path returns the system path for name, preferring a non-empty environment override.
