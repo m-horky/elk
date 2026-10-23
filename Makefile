@@ -20,3 +20,4 @@ build:
 	go build -o build/elk-identity ./examples/elk-identity
 	go build -o build/elk-config ./examples/elk-config
 	go build -o build/elk-config-rhsm ./examples/elk-config-rhsm
+	go build -o build/elk-facts ./examples/elk-facts

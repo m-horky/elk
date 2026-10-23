@@ -112,10 +112,7 @@ func runRegister(ctx context.Context, args []string) error { //nolint:funlen
 		name = "elk-test-identity"
 	}
 
-	systemFacts, err := facts.Collect()
-	if err != nil {
-		return fmt.Errorf("failed to collect system facts: %w", err)
-	}
+	systemFacts := facts.Collect(ctx)
 
 	slog.Info("creating Candlepin consumer", "organization", owners[0].Key)
 
