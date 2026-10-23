@@ -43,21 +43,12 @@ func NewFactsDTO(systemFacts *facts.Facts) map[string]string {
 		result["lscpu."+key] = value
 	}
 
-	setFact(result, "cpu.cpu(s)", getFact(systemFacts.CPUs, systemFacts.LSCPU, "cpu(s)"))
-	setFact(result, "cpu.cpu_socket(s)", getFact(systemFacts.CPUSockets, systemFacts.LSCPU, "socket(s)"))
+	setFact(result, "cpu.cpu(s)", copyFact(systemFacts.LSCPU, "cpu(s)"))
+	setFact(result, "cpu.cpu_socket(s)", copyFact(systemFacts.LSCPU, "socket(s)"))
 	setFact(result, "cpu.core(s)_per_socket", copyFact(systemFacts.LSCPU, "core(s)_per_socket"))
 	setFact(result, "cpu.thread(s)_per_core", copyFact(systemFacts.LSCPU, "thread(s)_per_core"))
 
 	return result
-}
-
-// getFact returns primary when it is available, otherwise the named lscpu value.
-func getFact(primary *string, values map[string]string, key string) *string {
-	if primary != nil {
-		return primary
-	}
-
-	return copyFact(values, key)
 }
 
 // copyFact returns a pointer to the value of key when it exists.

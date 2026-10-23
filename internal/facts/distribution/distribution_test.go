@@ -35,8 +35,7 @@ var _ internalfs.FS = (*fakeFS)(nil)
 // TestCollect verifies that Collect reads with the size limit and parses.
 //
 // Given a filesystem containing an os-release fixture, when Collect reads the
-// configured path, then it parses the distribution facts and reads at most one
-// mebibyte.
+// configured path, then it parses the distribution facts.
 func TestCollect(t *testing.T) {
 	t.Parallel()
 

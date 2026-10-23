@@ -25,8 +25,6 @@ type Distribution struct {
 }
 
 // Collect reads an os-release file at path and parses its distribution facts.
-// It reads at most one mebibyte and returns any read or parse error to the
-// caller, which decides whether collection is best effort.
 func Collect(filesystem fs.FS, path string) (Distribution, error) {
 	data, err := filesystem.Read(path, maxSize)
 	if err != nil {

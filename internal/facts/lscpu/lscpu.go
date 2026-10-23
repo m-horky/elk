@@ -10,8 +10,8 @@ import (
 	"github.com/m-horky/elk/internal/exec"
 )
 
-// ErrNoData reports that lscpu produced valid JSON without any fields.
-var ErrNoData = errors.New("lscpu returned no data")
+// errNoData reports that lscpu produced valid JSON without any fields.
+var errNoData = errors.New("lscpu returned no data")
 
 // lscpuOutput mirrors the top-level document emitted by lscpu --json.
 type lscpuOutput struct {
@@ -30,7 +30,7 @@ type lscpuEntry struct {
 // Only JSON output is supported. A nil environment selects the runner's fixed
 // minimal environment. Collect returns a nil map when the invocation fails,
 // exits nonzero, produces truncated output, yields malformed JSON, or reports
-// no fields at all; the last case reports ErrNoData.
+// no fields at all; the last case reports errNoData.
 func Collect(ctx context.Context, runner exec.Runner, path string) (map[string]string, error) {
 	result, err := runner.Run(ctx, exec.Command{
 		Path: path,
@@ -54,7 +54,7 @@ func Collect(ctx context.Context, runner exec.Runner, path string) (map[string]s
 	}
 
 	if len(facts) == 0 {
-		return nil, ErrNoData
+		return nil, errNoData
 	}
 
 	return facts, nil

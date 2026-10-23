@@ -103,7 +103,7 @@ func TestEnvDefault(t *testing.T) {
 		t.Fatalf("Run() error = %v", err)
 	}
 
-	want := []byte("|C|/usr/sbin:/usr/bin:/sbin:/bin")
+	want := []byte("|C.UTF-8|/usr/sbin:/usr/bin:/sbin:/bin")
 	if !bytes.Equal(result.Stdout, want) {
 		t.Errorf("Run() stdout = %q, want %q", result.Stdout, want)
 	}

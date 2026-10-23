@@ -26,8 +26,6 @@ func TestNewFactsDTO(t *testing.T) {
 		DistributionVersionModifier: new("ga"),
 		VirtIsGuest:                 new(false),
 		VirtHostType:                new("Not Applicable"),
-		CPUs:                        new("8"),
-		CPUSockets:                  new("1"),
 		LSCPU: map[string]string{
 			"cpu(s)":             "8",
 			"socket(s)":          "1",

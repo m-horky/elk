@@ -54,7 +54,7 @@ func TestParseXenDom0(t *testing.T) {
 // TestParseEmpty verifies empty output reports a non-guest host.
 //
 // Given virt-what produces no output, when parse reads it,
-// then IsGuest points to false and HostType points to Not Applicable.
+// then IsGuest points to false and HostType points to an empty value.
 func TestParseEmpty(t *testing.T) {
 	t.Parallel()
 

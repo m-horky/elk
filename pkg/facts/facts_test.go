@@ -70,12 +70,12 @@ func TestCollectPopulatesEverySource(t *testing.T) {
 		t.Errorf("VirtIsGuest = %v, want true", collected.VirtIsGuest)
 	}
 
-	if collected.CPUs == nil || *collected.CPUs != "8" {
-		t.Errorf("CPUs = %v, want 8", collected.CPUs)
+	if collected.LSCPU["cpu(s)"] != "8" {
+		t.Errorf("LSCPU[\"cpu(s)\"] = %q, want 8", collected.LSCPU["cpu(s)"])
 	}
 
-	if collected.CPUSockets == nil || *collected.CPUSockets != "1" {
-		t.Errorf("CPUSockets = %v, want 1", collected.CPUSockets)
+	if collected.LSCPU["socket(s)"] != "1" {
+		t.Errorf("LSCPU[\"socket(s)\"] = %q, want 1", collected.LSCPU["socket(s)"])
 	}
 }
 

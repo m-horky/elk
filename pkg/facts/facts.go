@@ -56,12 +56,8 @@ type Facts struct {
 	// VirtHostType contains the virtualization types reported by virt-what.
 	VirtHostType *string
 
-	// CPUs is the number of logical CPUs reported by lscpu.
-	CPUs *string
-	// CPUSockets is the number of CPU sockets reported by lscpu.
-	CPUSockets *string
-
 	// LSCPU contains the normalized lscpu fields, keyed without the "lscpu." prefix.
+	// CPU facts are derived from this map by service clients.
 	LSCPU map[string]string
 }
 
@@ -153,7 +149,7 @@ func collectVirt(ctx context.Context, collected *Facts, runner exec.Runner, path
 	collected.VirtHostType = info.HostType
 }
 
-// collectLSCPU copies CPU facts into the result and derives CPU topology facts.
+// collectLSCPU copies the lscpu facts into the result.
 func collectLSCPU(ctx context.Context, collected *Facts, runner exec.Runner, path string) {
 	ctx, cancel := context.WithTimeout(ctx, commandTimeout)
 	defer cancel()
@@ -166,16 +162,4 @@ func collectLSCPU(ctx context.Context, collected *Facts, runner exec.Runner, pat
 	}
 
 	collected.LSCPU = info
-	collected.CPUs = copyFact(info, "cpu(s)")
-	collected.CPUSockets = copyFact(info, "socket(s)")
-}
-
-// copyFact returns a pointer to the value of key when it exists.
-func copyFact(values map[string]string, key string) *string {
-	value, ok := values[key]
-	if !ok {
-		return nil
-	}
-
-	return &value
 }
