@@ -1,0 +1,6 @@
+# Distribution metadata used by the test suite.
+ID=fedora
+NAME="Fedora Linux \"Workstation\""
+VERSION_ID=40
+CPE_NAME='cpe:/o:fedoraproject:fedora:40:beta'
+DESCRIPTION="Paths like C:\\tmp are escaped"
