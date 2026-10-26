@@ -71,10 +71,7 @@ type IdentityDocument struct {
 	Version                 string    `json:"version"`
 }
 
-// NewClient constructs an AWS IMDS client. The HTTP client is configured
-// with the shared IMDS defaults: 30 second connect and request timeouts, a
-// 512 KiB response cap, and no proxy, so metadata traffic stays on the
-// link-local path.
+// NewClient constructs an AWS IMDS client.
 func NewClient(cfg Config) (*Client, error) {
 	slog.Debug("constructing AWS IMDS client")
 

@@ -9,7 +9,6 @@
 //		Path: "/latest/dynamic/instance-identity/document",
 //	})
 //
-// NewClient applies the shared IMDS defaults to the configuration: 30 second
-// connect and request timeouts, a 512 KiB response cap, and no proxy, so
-// metadata traffic stays on the link-local path.
+// NewClient applies common defaults to the configuration: connect and request timeouts,
+// a response cap, and no proxy, so metadata traffic stays link-local.
 package imds

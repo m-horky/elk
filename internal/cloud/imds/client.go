@@ -9,15 +9,15 @@ import (
 
 const (
 	// defaultTimeout bounds both connecting to and requesting from an IMDS.
-	defaultTimeout = 30 * time.Second
+	defaultTimeout = time.Second
 	// MaxResponseBody caps every IMDS response; all real responses are tiny.
-	MaxResponseBody = 512 << 10
+	MaxResponseBody = 512 * 1024 // 512 KiB
 )
 
 // NewClient constructs the HTTP client shared by the provider IMDS clients.
-// Connect and request timeouts default to 30 seconds, responses are capped
-// at MaxResponseBody, and configured proxies are ignored so metadata traffic
-// stays on the link-local path.
+// Connect and request timeouts use defaultTimeout if not set, responses are
+// capped at MaxResponseBody, and configured proxies are ignored so metadata
+// traffic stays on the link-local path.
 func NewClient(cfg httpclient.Config) (*httpclient.Client, error) {
 	client, err := httpclient.New(normalize(cfg))
 	if err != nil {
